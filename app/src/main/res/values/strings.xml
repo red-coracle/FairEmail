@@ -689,6 +689,7 @@
     <string name="title_advanced_protocol">Protocol logging</string>
     <string name="title_advanced_log_info">Debug logging</string>
     <string name="title_advanced_debug">Debug mode</string>
+    <string name="title_advanced_pro">Pro mode</string>
     <string name="title_advanced_test1" translatable="false">Test #1</string>
     <string name="title_advanced_test2" translatable="false">Test #2</string>
     <string name="title_advanced_test3" translatable="false">Test #3</string>

@@ -123,6 +123,7 @@ public class FragmentOptionsMisc extends FragmentBase implements SharedPreferenc
     private SwitchCompat swProtocol;
     private SwitchCompat swLogInfo;
     private SwitchCompat swDebug;
+    private SwitchCompat swPro;
     private SwitchCompat swTest1;
     private SwitchCompat swTest2;
     private SwitchCompat swTest3;
@@ -275,6 +276,7 @@ public class FragmentOptionsMisc extends FragmentBase implements SharedPreferenc
         swProtocol = view.findViewById(R.id.swProtocol);
         swLogInfo = view.findViewById(R.id.swLogInfo);
         swDebug = view.findViewById(R.id.swDebug);
+        swPro = view.findViewById(R.id.swPro);
         swTest1 = view.findViewById(R.id.swTest1);
         swTest2 = view.findViewById(R.id.swTest2);
         swTest3 = view.findViewById(R.id.swTest3);
@@ -660,6 +662,14 @@ public class FragmentOptionsMisc extends FragmentBase implements SharedPreferenc
                             view.scrollTo(0, swDebug.getTop());
                         }
                     });
+            }
+        });
+
+        swPro.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
+                prefs.edit().putBoolean("pro", checked).apply();
+                prefs.edit().putBoolean("play_store", false).apply();
             }
         });
 

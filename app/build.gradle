@@ -1,5 +1,5 @@
 apply plugin: 'com.android.application'
-apply plugin: 'com.bugsnag.android.gradle'
+//apply plugin: 'com.bugsnag.android.gradle'
 apply plugin: 'kotlin-android'
 apply plugin: 'de.undercouch.download'
 
@@ -41,7 +41,7 @@ android {
         ndkVersion "23.1.7779620"
         ndk {
             // Bugsnag, sqlite
-            abiFilters "armeabi-v7a", "x86", "arm64-v8a", "x86_64"
+            abiFilters "arm64-v8a"
         }
     }
 
@@ -112,7 +112,7 @@ android {
             storePassword keystoreProperties['storePassword']
             keyAlias keystoreProperties['keyAlias']
             keyPassword keystoreProperties['keyPassword']
-            v1SigningEnabled true
+            //v1SigningEnabled true
             v2SigningEnabled true
         }
     }
@@ -242,7 +242,7 @@ android {
             }
     }
 
-    bugsnag {
+    /*bugsnag {
         // https://docs.bugsnag.com/build-integrations/gradle/
         uploadJvmMappings = false // disables upload of ProGuard/DexGuard/R8 mapping files
         uploadNdkMappings = false // disables upload of NDK mapping files
@@ -253,7 +253,7 @@ android {
             provider = "github-enterprise"
             repository = "https://github.com/M66B/FairEmail"
         }
-    }
+    }*/
 }
 
 task copyMarkdown(type: Copy) {
