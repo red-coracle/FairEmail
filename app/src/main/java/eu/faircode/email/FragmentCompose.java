@@ -74,7 +74,6 @@ import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
-import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.text.method.ArrowKeyMovementMethod;
@@ -85,7 +84,6 @@ import android.text.style.ImageSpan;
 import android.text.style.ParagraphStyle;
 import android.text.style.QuoteSpan;
 import android.text.style.RelativeSizeSpan;
-import android.text.style.SuggestionSpan;
 import android.text.style.URLSpan;
 import android.util.LogPrinter;
 import android.util.Pair;
@@ -170,10 +168,7 @@ import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.bouncycastle.util.Store;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.jsoup.nodes.Node;
-import org.jsoup.nodes.TextNode;
 import org.jsoup.select.Elements;
-import org.jsoup.select.NodeFilter;
 import org.openintents.openpgp.OpenPgpError;
 import org.openintents.openpgp.util.OpenPgpApi;
 import org.w3c.dom.css.CSSStyleSheet;
@@ -273,6 +268,7 @@ public class FragmentCompose extends FragmentBase {
     private View vwAnchor;
     private TextViewAutoCompleteAction etSearch;
     private BottomNavigationView style_bar;
+    private BottomNavigationView block_bar;
     private BottomNavigationView media_bar;
     private BottomNavigationView bottom_navigation;
     private ContentLoadingProgressBar pbWait;
@@ -291,9 +287,12 @@ public class FragmentCompose extends FragmentBase {
     private String display_font;
     private boolean dsn = true;
     private Integer encrypt = null;
+    private boolean block = false;
     private boolean media = true;
     private boolean compact = false;
     private int zoom = 0;
+    private boolean lt_enabled;
+    private boolean lt_auto;
 
     private long working = -1;
     private State state = State.NONE;
@@ -346,12 +345,19 @@ public class FragmentCompose extends FragmentBase {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
+        final Context context = getContext();
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        boolean experiments = prefs.getBoolean("experiments", false);
+
         compose_font = prefs.getString("compose_font", "");
         display_font = prefs.getString("display_font", "");
+        block = experiments && prefs.getBoolean("compose_block", false);
         media = prefs.getBoolean("compose_media", true);
         compact = prefs.getBoolean("compose_compact", false);
         zoom = prefs.getInt("compose_zoom", compact ? 0 : 1);
+
+        lt_enabled = LanguageTool.isEnabled(context);
+        lt_auto = LanguageTool.isAuto(context);
 
         setTitle(R.string.page_compose);
         setSubtitle(getResources().getQuantityString(R.plurals.page_message, 1));
@@ -395,6 +401,7 @@ public class FragmentCompose extends FragmentBase {
         vwAnchor = view.findViewById(R.id.vwAnchor);
         etSearch = view.findViewById(R.id.etSearch);
         style_bar = view.findViewById(R.id.style_bar);
+        block_bar = view.findViewById(R.id.block_bar);
         media_bar = view.findViewById(R.id.media_bar);
         bottom_navigation = view.findViewById(R.id.bottom_navigation);
 
@@ -791,6 +798,14 @@ public class FragmentCompose extends FragmentBase {
 
                         if (renum)
                             StyleHelper.renumber(text, false, etBody.getContext());
+
+                        if (lt_auto) {
+                            int start = added;
+                            while (start > 0 && text.charAt(start - 1) != '\n')
+                                start--;
+                            if (start < added)
+                                onLanguageTool(start, added, true);
+                        }
                     } catch (Throwable ex) {
                         Log.e(ex);
                     } finally {
@@ -1019,6 +1034,74 @@ public class FragmentCompose extends FragmentBase {
             }
         });
 
+        block_bar.setOnNavigationItemSelectedListener(new BottomNavigationView.OnNavigationItemSelectedListener() {
+            @Override
+            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+                int action = item.getItemId();
+                if (action == R.id.menu_blockquote) {
+                    Pair<Integer, Integer> block = StyleHelper.getParagraph(etBody, true);
+                    if (block == null)
+                        return false;
+                    StyleHelper.setBlockQuote(etBody, block.first, block.second, false);
+                    return true;
+                } else {
+                    PopupMenuLifecycle popupMenu = new PopupMenuLifecycle(getContext(), getViewLifecycleOwner(), block_bar.findViewById(action));
+
+                    if (action == R.id.menu_alignment)
+                        popupMenu.inflate(R.menu.popup_style_alignment);
+                    else if (action == R.id.menu_list)
+                        popupMenu.inflate(R.menu.popup_style_list);
+                    else if (action == R.id.menu_indentation)
+                        popupMenu.inflate(R.menu.popup_style_indentation);
+
+                    Menu menu = popupMenu.getMenu();
+                    Editable edit = etBody.getText();
+
+                    Pair<Integer, Integer> b = StyleHelper.getParagraph(etBody, true);
+                    BulletSpan[] bullets = (b == null ? null : edit.getSpans(b.first, b.second, BulletSpan.class));
+                    IndentSpan[] indents = (b == null ? null : edit.getSpans(b.first, b.second, IndentSpan.class));
+                    if (b == null ||
+                            (action == R.id.menu_list && indents.length > 0) ||
+                            (action == R.id.menu_indentation && bullets.length > 0)) {
+                        for (int i = 0; i < menu.size(); i++)
+                            menu.getItem(i).setEnabled(false);
+                    } else {
+                        if (action == R.id.menu_list) {
+                            Pair<Integer, Integer> p = StyleHelper.getParagraph(etBody, false);
+                            Integer maxLevel = (p == null ? null : StyleHelper.getMaxListLevel(edit, p.first, p.second));
+                            menu.findItem(R.id.menu_style_list_increase).setEnabled(maxLevel != null);
+                            menu.findItem(R.id.menu_style_list_decrease).setEnabled(maxLevel != null && maxLevel > 0);
+                        } else if (action == R.id.menu_indentation)
+                            popupMenu.getMenu().findItem(R.id.menu_style_indentation_decrease).setEnabled(indents.length > 0);
+                    }
+
+                    popupMenu.insertIcons(getContext());
+                    popupMenu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+                        @Override
+                        public boolean onMenuItemClick(MenuItem item) {
+                            int itemId = item.getItemId();
+                            boolean level = (itemId == R.id.menu_style_list_decrease || itemId == R.id.menu_style_list_increase);
+                            Pair<Integer, Integer> block = StyleHelper.getParagraph(etBody, !level);
+                            if (block == null)
+                                return false;
+                            if (action == R.id.menu_alignment)
+                                StyleHelper.setAlignment(item.getItemId(), etBody, block.first, block.second, false);
+                            else if (action == R.id.menu_list) {
+                                if (level)
+                                    StyleHelper.setListLevel(itemId, etBody, block.first, block.second, false);
+                                else
+                                    StyleHelper.setList(itemId, etBody, block.first, block.second, false);
+                            } else if (action == R.id.menu_indentation)
+                                StyleHelper.setIndentation(item.getItemId(), etBody, block.first, block.second, false);
+                            return true;
+                        }
+                    });
+                    popupMenu.show();
+                    return true;
+                }
+            }
+        });
+
         media_bar.setOnNavigationItemSelectedListener(new BottomNavigationView.OnNavigationItemSelectedListener() {
             @Override
             public boolean onNavigationItemSelected(@NonNull MenuItem item) {
@@ -1103,6 +1186,7 @@ public class FragmentCompose extends FragmentBase {
         tvReference.setVisibility(View.GONE);
         etSearch.setVisibility(View.GONE);
         style_bar.setVisibility(View.GONE);
+        block_bar.setVisibility(View.GONE);
         media_bar.setVisibility(View.GONE);
         bottom_navigation.setVisibility(View.GONE);
         pbWait.setVisibility(View.VISIBLE);
@@ -1848,6 +1932,7 @@ public class FragmentCompose extends FragmentBase {
         ibZoom.setEnabled(state == State.LOADED);
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        boolean experiments = prefs.getBoolean("experiments", false);
         boolean save_drafts = prefs.getBoolean("save_drafts", true);
         boolean send_chips = prefs.getBoolean("send_chips", true);
         boolean send_dialog = prefs.getBoolean("send_dialog", true);
@@ -1857,6 +1942,7 @@ public class FragmentCompose extends FragmentBase {
         menu.findItem(R.id.menu_send_chips).setChecked(send_chips);
         menu.findItem(R.id.menu_send_dialog).setChecked(send_dialog);
         menu.findItem(R.id.menu_image_dialog).setChecked(image_dialog);
+        menu.findItem(R.id.menu_block).setChecked(block).setVisible(experiments);
         menu.findItem(R.id.menu_media).setChecked(media);
         menu.findItem(R.id.menu_compact).setChecked(compact);
 
@@ -1886,8 +1972,8 @@ public class FragmentCompose extends FragmentBase {
         bottom_navigation.findViewById(R.id.action_save).setOnLongClickListener(new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View v) {
-                if (LanguageTool.isEnabled(v.getContext())) {
-                    onLanguageTool();
+                if (lt_enabled) {
+                    onLanguageTool(0, etBody.length(), false);
                     return true;
                 } else
                     return false;
@@ -1928,6 +2014,9 @@ public class FragmentCompose extends FragmentBase {
             return true;
         } else if (itemId == R.id.menu_image_dialog) {
             onMenuImageDialog();
+            return true;
+        } else if (itemId == R.id.menu_block) {
+            onMenuBlockBar();
             return true;
         } else if (itemId == R.id.menu_media) {
             onMenuMediaBar();
@@ -2080,6 +2169,14 @@ public class FragmentCompose extends FragmentBase {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
         boolean image_dialog = prefs.getBoolean("image_dialog", true);
         prefs.edit().putBoolean("image_dialog", !image_dialog).apply();
+    }
+
+    private void onMenuBlockBar() {
+        block = !block;
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
+        prefs.edit().putBoolean("compose_block", block).apply();
+        block_bar.setVisibility(block ? View.VISIBLE : View.GONE);
+        invalidateOptionsMenu();
     }
 
     private void onMenuMediaBar() {
@@ -2310,7 +2407,15 @@ public class FragmentCompose extends FragmentBase {
         if (languages == null)
             languages = new ArrayList<>();
 
-        Pair<Integer, Integer> paragraph = DeepL.getParagraph(etBody);
+        int s = etBody.getSelectionStart();
+        Editable edit = etBody.getText();
+        if (s > 1 && s <= edit.length() &&
+                edit.charAt(s - 1) == '\n' &&
+                edit.charAt(s - 2) != '\n' &&
+                (s == edit.length() || edit.charAt(s) == '\n'))
+            etBody.setSelection(s - 1, s - 1);
+
+        Pair<Integer, Integer> paragraph = StyleHelper.getParagraph(etBody);
         boolean canTranslate = (DeepL.canTranslate(context) && paragraph != null);
 
         PopupMenuLifecycle popupMenu = new PopupMenuLifecycle(context, getViewLifecycleOwner(), anchor);
@@ -2355,7 +2460,7 @@ public class FragmentCompose extends FragmentBase {
             }
 
             private void onMenuTranslate(String target) {
-                final Pair<Integer, Integer> paragraph = DeepL.getParagraph(etBody);
+                final Pair<Integer, Integer> paragraph = StyleHelper.getParagraph(etBody);
                 if (paragraph == null)
                     return;
 
@@ -2442,7 +2547,7 @@ public class FragmentCompose extends FragmentBase {
                                     paragraph.first, paragraph.second, RelativeSizeSpan.class);
                             for (RelativeSizeSpan span : spans)
                                 edit.removeSpan(span);
-                            edit.setSpan(new RelativeSizeSpan(HtmlHelper.FONT_SMALL),
+                            edit.setSpan(new RelativeSizeSpan(HtmlHelper.FONT_XSMALL),
                                     paragraph.first, paragraph.second,
                                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                         }
@@ -2476,29 +2581,33 @@ public class FragmentCompose extends FragmentBase {
         popupMenu.showWithIcons(context, anchor);
     }
 
-    private void onLanguageTool() {
+    private void onLanguageTool(int start, int end, boolean silent) {
         etBody.clearComposingText();
 
         Log.i("LT running enabled=" + etBody.isSuggestionsEnabled());
 
         Bundle args = new Bundle();
-        args.putCharSequence("text", etBody.getText());
+        args.putCharSequence("text", etBody.getText().subSequence(start, end));
 
         new SimpleTask<List<LanguageTool.Suggestion>>() {
             private Toast toast = null;
 
             @Override
             protected void onPreExecute(Bundle args) {
-                toast = ToastEx.makeText(getContext(), R.string.title_suggestions_check, Toast.LENGTH_LONG);
-                toast.show();
-                setBusy(true);
+                if (!silent) {
+                    toast = ToastEx.makeText(getContext(), R.string.title_suggestions_check, Toast.LENGTH_LONG);
+                    toast.show();
+                    setBusy(true);
+                }
             }
 
             @Override
             protected void onPostExecute(Bundle args) {
-                if (toast != null)
-                    toast.cancel();
-                setBusy(false);
+                if (!silent) {
+                    if (toast != null)
+                        toast.cancel();
+                    setBusy(false);
+                }
             }
 
             @Override
@@ -2509,30 +2618,11 @@ public class FragmentCompose extends FragmentBase {
 
             @Override
             protected void onExecuted(Bundle args, List<LanguageTool.Suggestion> suggestions) {
-                if (suggestions == null || suggestions.size() == 0) {
+                LanguageTool.applySuggestions(etBody, start, end, suggestions);
+
+                if (!silent &&
+                        (suggestions == null || suggestions.size() == 0))
                     ToastEx.makeText(getContext(), R.string.title_suggestions_none, Toast.LENGTH_LONG).show();
-                    return;
-                }
-
-                Editable edit = etBody.getText();
-                if (edit == null)
-                    return;
-
-                // https://developer.android.com/reference/android/text/style/SuggestionSpan
-                for (SuggestionSpanEx span : edit.getSpans(0, edit.length(), SuggestionSpanEx.class)) {
-                    Log.i("LT removing=" + span);
-                    edit.removeSpan(span);
-                }
-
-                for (LanguageTool.Suggestion suggestion : suggestions) {
-                    Log.i("LT adding=" + suggestion);
-                    SuggestionSpan span = new SuggestionSpanEx(getContext(),
-                            suggestion.replacements.toArray(new String[0]),
-                            SuggestionSpan.FLAG_MISSPELLED);
-                    int start = suggestion.offset;
-                    int end = start + suggestion.length;
-                    edit.setSpan(span, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                }
             }
 
             @Override
@@ -2545,24 +2635,12 @@ public class FragmentCompose extends FragmentBase {
 
             @Override
             protected void onException(Bundle args, Throwable ex) {
-                Throwable exex = new Throwable("LanguageTool", ex);
-                Log.unexpectedError(getParentFragmentManager(), exex, false);
+                if (!silent) {
+                    Throwable exex = new Throwable("LanguageTool", ex);
+                    Log.unexpectedError(getParentFragmentManager(), exex, false);
+                }
             }
         }.execute(this, args, "compose:lt");
-    }
-
-    private static class SuggestionSpanEx extends SuggestionSpan {
-        private final int textColorHighlight;
-
-        public SuggestionSpanEx(Context context, String[] suggestions, int flags) {
-            super(context, suggestions, flags);
-            textColorHighlight = Helper.resolveColor(context, android.R.attr.textColorHighlight);
-        }
-
-        @Override
-        public void updateDrawState(TextPaint tp) {
-            tp.bgColor = textColorHighlight;
-        }
     }
 
     private boolean onActionStyle(int action, View anchor) {
@@ -3034,9 +3112,7 @@ public class FragmentCompose extends FragmentBase {
                 });
                 snackbar.show();
             } else {
-                File dir = new File(context.getFilesDir(), "photo");
-                if (!dir.exists())
-                    dir.mkdir();
+                File dir = Helper.ensureExists(new File(context.getFilesDir(), "photo"));
                 File file = new File(dir, working + ".jpg");
                 try {
                     photoURI = FileProvider.getUriForFile(context, BuildConfig.APPLICATION_ID, file);
@@ -3051,7 +3127,7 @@ public class FragmentCompose extends FragmentBase {
             // https://developer.android.com/reference/android/provider/MediaStore#ACTION_PICK_IMAGES
             // Android 12: cmd device_config put storage_native_boot picker_intent_enabled true
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-            boolean photo_picker = prefs.getBoolean("photo_picker", true);
+            boolean photo_picker = prefs.getBoolean("photo_picker", false);
             Intent picker = new Intent(MediaStore.ACTION_PICK_IMAGES);
             picker.setType("image/*");
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -3332,9 +3408,7 @@ public class FragmentCompose extends FragmentBase {
                     throw new IllegalArgumentException(context.getString(R.string.title_from_missing));
 
                 // Create files
-                File tmp = new File(context.getFilesDir(), "encryption");
-                if (!tmp.exists())
-                    tmp.mkdir();
+                File tmp = Helper.ensureExists(new File(context.getFilesDir(), "encryption"));
                 File input = new File(tmp, draft.id + "_" + session + ".pgp_input");
                 File output = new File(tmp, draft.id + "_" + session + ".pgp_output");
 
@@ -3681,9 +3755,7 @@ public class FragmentCompose extends FragmentBase {
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
                 boolean check_certificate = prefs.getBoolean("check_certificate", true);
 
-                File tmp = new File(context.getFilesDir(), "encryption");
-                if (!tmp.exists())
-                    tmp.mkdir();
+                File tmp = Helper.ensureExists(new File(context.getFilesDir(), "encryption"));
 
                 DB db = DB.getInstance(context);
 
@@ -4317,6 +4389,10 @@ public class FragmentCompose extends FragmentBase {
 
         EntityAttachment attachment = new EntityAttachment();
         UriInfo info = getInfo(uri, context);
+
+        EntityLog.log(context, "Add attachment" +
+                " uri=" + uri + " image=" + image + " resize=" + resize + " privacy=" + privacy +
+                " name=" + info.name + " type=" + info.type + " size=" + info.size);
 
         String ext = Helper.getExtension(info.name);
         if (info.name != null && ext == null && info.type != null) {
@@ -5044,15 +5120,13 @@ public class FragmentCompose extends FragmentBase {
                                     EntityMessage.PGP_SIGNENCRYPT.equals(ref.ui_encrypt)) {
                                 if (Helper.isOpenKeychainInstalled(context) &&
                                         selected.sign_key != null &&
-                                        (EntityMessage.PGP_SIGNENCRYPT.equals(ref.ui_encrypt) ||
-                                                PgpHelper.hasPgpKey(context, recipients)))
+                                        PgpHelper.hasPgpKey(context, recipients))
                                     data.draft.ui_encrypt = ref.ui_encrypt;
                             } else if (EntityMessage.SMIME_SIGNONLY.equals(ref.ui_encrypt) ||
                                     EntityMessage.SMIME_SIGNENCRYPT.equals(ref.ui_encrypt)) {
                                 if (ActivityBilling.isPro(context) &&
                                         selected.sign_key_alias != null &&
-                                        (EntityMessage.SMIME_SIGNENCRYPT.equals(ref.ui_encrypt) ||
-                                                SmimeHelper.hasSmimeKey(context, recipients)))
+                                        SmimeHelper.hasSmimeKey(context, recipients))
                                     data.draft.ui_encrypt = ref.ui_encrypt;
                             }
                         }
@@ -5082,6 +5156,7 @@ public class FragmentCompose extends FragmentBase {
 
                         if (ref.content && "resend".equals(action)) {
                             document = JsoupEx.parse(ref.getFile(context));
+                            HtmlHelper.clearAnnotations(document);
                             // Save original body
                             Element div = document.body()
                                     .tagName("div")
@@ -5123,46 +5198,7 @@ public class FragmentCompose extends FragmentBase {
                                     // Remove signature separators
                                     boolean remove_signatures = prefs.getBoolean("remove_signatures", false);
                                     if (remove_signatures)
-                                        d.body().filter(new NodeFilter() {
-                                            private boolean remove = false;
-                                            private boolean noremove = false;
-
-                                            @Override
-                                            public FilterResult head(Node node, int depth) {
-                                                if (node instanceof TextNode) {
-                                                    TextNode tnode = (TextNode) node;
-                                                    String text = tnode.getWholeText()
-                                                            .replaceAll("[\r\n]+$", "")
-                                                            .replaceAll("^[\r\n]+", "");
-                                                    if ("-- ".equals(text)) {
-                                                        if (tnode.getWholeText().endsWith("\n"))
-                                                            remove = true;
-                                                        else {
-                                                            Node next = node.nextSibling();
-                                                            if (next == null) {
-                                                                Node parent = node.parent();
-                                                                if (parent != null)
-                                                                    next = parent.nextSibling();
-                                                            }
-                                                            if (next != null && "br".equals(next.nodeName()))
-                                                                remove = true;
-                                                        }
-                                                    }
-                                                } else if (node instanceof Element) {
-                                                    Element element = (Element) node;
-                                                    if (remove && "blockquote".equals(element.tagName()))
-                                                        noremove = true;
-                                                }
-
-                                                return (remove && !noremove
-                                                        ? FilterResult.REMOVE : FilterResult.CONTINUE);
-                                            }
-
-                                            @Override
-                                            public FilterResult tail(Node node, int depth) {
-                                                return FilterResult.CONTINUE;
-                                            }
-                                        });
+                                        HtmlHelper.removeSignatures(d);
 
                                     // Limit number of nested block quotes
                                     boolean quote_limit = prefs.getBoolean("quote_limit", true);
@@ -6364,11 +6400,18 @@ public class FragmentCompose extends FragmentBase {
                             args.putBoolean("styled", styled);
 
                             int attached = 0;
-                            for (EntityAttachment attachment : attachments)
+                            List<String> dangerous = new ArrayList<>();
+                            for (EntityAttachment attachment : attachments) {
                                 if (!attachment.available)
                                     throw new IllegalArgumentException(context.getString(R.string.title_attachments_missing));
                                 else if (attachment.isAttachment())
                                     attached++;
+                                String ext = Helper.getExtension(attachment.name);
+                                if (Helper.DANGEROUS_EXTENSIONS.contains(ext))
+                                    dangerous.add(attachment.name);
+                            }
+                            if (dangerous.size() > 0)
+                                args.putString("remind_extension", String.join(", ", dangerous));
 
                             // Check for missing attachments
                             if (attached == 0) {
@@ -6607,6 +6650,7 @@ public class FragmentCompose extends FragmentBase {
                 boolean remind_subject = args.getBoolean("remind_subject", false);
                 boolean remind_text = args.getBoolean("remind_text", false);
                 boolean remind_attachment = args.getBoolean("remind_attachment", false);
+                String remind_extension = args.getString("remind_extension");
                 boolean styled = args.getBoolean("styled", false);
 
                 int recipients = (draft.to == null ? 0 : draft.to.length) +
@@ -6619,7 +6663,8 @@ public class FragmentCompose extends FragmentBase {
                         recipients > RECIPIENTS_WARNING ||
                         (styled && draft.isPlainOnly()) ||
                         (send_reminders &&
-                                (remind_extra || remind_subject || remind_text || remind_attachment))) {
+                                (remind_extra || remind_subject || remind_text ||
+                                        remind_attachment || remind_extension != null))) {
                     setBusy(false);
 
                     Helper.hideKeyboard(view);
@@ -6754,6 +6799,7 @@ public class FragmentCompose extends FragmentBase {
             @Override
             protected void onPostExecute(Bundle args) {
                 pbWait.setVisibility(View.GONE);
+                block_bar.setVisibility(block ? View.VISIBLE : View.GONE);
                 media_bar.setVisibility(media ? View.VISIBLE : View.GONE);
                 bottom_navigation.getMenu().findItem(R.id.action_undo).setVisible(draft.revision > 1);
                 bottom_navigation.getMenu().findItem(R.id.action_redo).setVisible(draft.revision < draft.revisions);
@@ -6918,6 +6964,9 @@ public class FragmentCompose extends FragmentBase {
                 setFocus(selStart < 0 ? null : R.id.etBody, selStart, selStart, postShow == null);
                 if (postShow != null)
                     getMainHandler().post(postShow);
+
+                if (lt_auto)
+                    onLanguageTool(0, etBody.length(), true);
             }
 
             @Override
@@ -7500,6 +7549,7 @@ public class FragmentCompose extends FragmentBase {
             final boolean remind_subject = args.getBoolean("remind_subject", false);
             final boolean remind_text = args.getBoolean("remind_text", false);
             final boolean remind_attachment = args.getBoolean("remind_attachment", false);
+            final String remind_extension = args.getString("remind_extension");
             final boolean styled = args.getBoolean("styled", false);
             final long size = args.getLong("size", -1);
             final long max_size = args.getLong("max_size", -1);
@@ -7531,6 +7581,7 @@ public class FragmentCompose extends FragmentBase {
             final TextView tvRemindSubject = dview.findViewById(R.id.tvRemindSubject);
             final TextView tvRemindText = dview.findViewById(R.id.tvRemindText);
             final TextView tvRemindAttachment = dview.findViewById(R.id.tvRemindAttachment);
+            final TextView tvRemindExtension = dview.findViewById(R.id.tvRemindExtension);
             final SwitchCompat swSendReminders = dview.findViewById(R.id.swSendReminders);
             final TextView tvSendRemindersHint = dview.findViewById(R.id.tvSendRemindersHint);
             final TextView tvTo = dview.findViewById(R.id.tvTo);
@@ -7586,6 +7637,9 @@ public class FragmentCompose extends FragmentBase {
             tvRemindText.setVisibility(send_reminders && remind_text ? View.VISIBLE : View.GONE);
             tvRemindAttachment.setVisibility(send_reminders && remind_attachment ? View.VISIBLE : View.GONE);
 
+            tvRemindExtension.setText(getString(R.string.title_attachment_warning, remind_extension));
+            tvRemindExtension.setVisibility(send_reminders && remind_extension != null ? View.VISIBLE : View.GONE);
+
             tvTo.setText(null);
             tvVia.setText(null);
             tvPlainHint.setVisibility(View.GONE);
@@ -7604,7 +7658,8 @@ public class FragmentCompose extends FragmentBase {
 
             Helper.setViewsEnabled(dview, false);
 
-            boolean reminder = (remind_extra || remind_subject || remind_text || remind_attachment);
+            boolean reminder = (remind_extra || remind_subject || remind_text ||
+                    remind_attachment || remind_extension != null);
             swSendReminders.setChecked(send_reminders);
             swSendReminders.setVisibility(send_reminders && reminder ? View.VISIBLE : View.GONE);
             tvSendRemindersHint.setVisibility(View.GONE);
@@ -7616,6 +7671,7 @@ public class FragmentCompose extends FragmentBase {
                     tvRemindSubject.setVisibility(checked && remind_subject ? View.VISIBLE : View.GONE);
                     tvRemindText.setVisibility(checked && remind_text ? View.VISIBLE : View.GONE);
                     tvRemindAttachment.setVisibility(checked && remind_attachment ? View.VISIBLE : View.GONE);
+                    tvRemindExtension.setVisibility(checked && remind_extension != null ? View.VISIBLE : View.GONE);
                     tvSendRemindersHint.setVisibility(checked ? View.GONE : View.VISIBLE);
                 }
             });
@@ -8079,6 +8135,7 @@ public class FragmentCompose extends FragmentBase {
         }
     }
 
+    @NonNull
     private static UriInfo getInfo(Uri uri, Context context) {
         UriInfo result = new UriInfo();
         try {

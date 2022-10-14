@@ -587,7 +587,7 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
         swAutoLockNav.setChecked(prefs.getBoolean("autolock_nav", false));
 
         swClientId.setChecked(prefs.getBoolean("client_id", true));
-        swHideTimeZone.setChecked(prefs.getBoolean("hide_timezone", true));
+        swHideTimeZone.setChecked(prefs.getBoolean("hide_timezone", false));
         swDisplayHidden.setChecked(prefs.getBoolean("display_hidden", false));
         swIncognitoKeyboard.setChecked(prefs.getBoolean("incognito_keyboard", false));
         swSecure.setChecked(prefs.getBoolean("secure", false));
@@ -595,7 +595,7 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
         tvGenericUserAgent.setText(WebViewEx.getUserAgent(getContext()));
         swGenericUserAgent.setChecked(prefs.getBoolean("generic_ua", false));
         swSafeBrowsing.setChecked(prefs.getBoolean("safe_browsing", false));
-        swLoadEmoji.setChecked(prefs.getBoolean("load_emoji", BuildConfig.PLAY_STORE_RELEASE));
+        swLoadEmoji.setChecked(prefs.getBoolean("load_emoji", false));
 
         long time = prefs.getLong("disconnect_last", -1);
         DateFormat DF = SimpleDateFormat.getDateTimeInstance();

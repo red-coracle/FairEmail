@@ -9,6 +9,8 @@
     <string name="app_continue">Всё равно продолжить</string>
     <string name="app_exit">Для выхода снова перейдите \"назад\"</string>
     <string name="app_cake">Недостаточно места</string>
+    <string name="app_cake_remaining">Оставшееся место на устройстве: %1$s</string>
+    <string name="app_cake_required">Минимально необходимое место: %1$s</string>
     <string name="app_updated">Последнее обновление: %1$s</string>
     <string name="app_download">Загружено из: %1$s</string>
     <string name="channel_service">Отслеживание</string>
@@ -400,6 +402,7 @@
     <string name="title_advanced_signature_forward">Использовать подпись при пересылке</string>
     <string name="title_advanced_discard_delete">При отказе от черновика удалять его безвозвратно</string>
     <string name="title_advanced_reply_move">При ответе на сообщение сохранять ответ в той же папке</string>
+    <string name="title_advanced_reply_move_inbox">Также для сообщений во \"Входящих\"</string>
     <string name="title_advanced_auto_link">Автоматическое создание ссылок</string>
     <string name="title_advanced_plain_only">По умолчанию отправлять простым текстом</string>
     <string name="title_advanced_flow">\"Пластичное\" форматирование обычного текста</string>
@@ -416,6 +419,7 @@
     <string name="title_advanced_download_eml">Загружать оригиналы сообщений</string>
     <string name="title_advanced_download_plain">По умолчанию загружать только обычный текст (если доступно)</string>
     <string name="title_advanced_validated">Требовать проверенное подключение</string>
+    <string name="title_advanced_validated_captive">Требовать подключение, подтверждённое порталом авторизации</string>
     <string name="title_advanced_vpn_only">Подключаться только через VPN</string>
     <string name="title_advanced_timeout">Время ожидания подключения (сек.)</string>
     <string name="title_advanced_prefer_ip4">Предпочитать IPv4</string>
@@ -455,6 +459,7 @@
     <string name="title_advanced_cards_shadow_highlight">Использовать цвет подсветки вместо цвета акцента</string>
     <string name="title_advanced_tabular_dividers">Разделительные линии при использовании стиля с табуляцией</string>
     <string name="title_advanced_date_header">Группировать по дате</string>
+    <string name="title_advanced_date_week">Группировать по неделям вместо дней</string>
     <string name="title_advanced_date_fixed">Показывать постоянный заголовок с датой вверху</string>
     <string name="title_advanced_date_bold">Показывать дату жирным шрифтом</string>
     <string name="title_advanced_threading">Связанные диалоги</string>
@@ -664,6 +669,7 @@
     <string name="title_advanced_language">Язык</string>
     <string name="title_advanced_language_system">Системный</string>
     <string name="title_advanced_lt">Интеграция с LanguageTool</string>
+    <string name="title_advanced_lt_auto">Проверять абзац после новой строки</string>
     <string name="title_advanced_deepl">Интеграция с DeepL</string>
     <string name="title_advanced_virus_total">Интеграция с VirusTotal</string>
     <string name="title_advanced_sdcard">Я хочу использовать SD-карту</string>
@@ -679,6 +685,7 @@
     <string name="title_advanced_app">Настройки приложения</string>
     <string name="title_advanced_more">Другие возможности</string>
     <string name="title_advanced_main_log">Основной журнал</string>
+    <string name="title_advanced_main_log_mem">Журнал использования памяти</string>
     <string name="title_advanced_protocol">Журнал протокола</string>
     <string name="title_advanced_log_info">Журнал отладки</string>
     <string name="title_advanced_debug">Режим отладки</string>
@@ -812,6 +819,7 @@
     <string name="title_account_category">Категория</string>
     <string name="title_account_name_hint">Используется для разграничения папок</string>
     <string name="title_account_interval_hint">Частота обновления соединения для push-сообщений или частота проверки новых сообщений</string>
+    <string name="title_account_noop_hint">Подключение будет обновляться более активно, но также больше расходовать заряд батареи</string>
     <string name="title_account_partial_fetch_hint">Отключайте это только в случае пустых сообщений или повреждённых вложений</string>
     <string name="title_color">Цвет</string>
     <string name="title_background">Фон</string>
@@ -852,6 +860,7 @@
     <string name="title_max_messages">Максимальное количество загружаемых сообщений (пусто для всех)</string>
     <string name="title_keep_poll_interval">Интервал опроса (мин.)</string>
     <string name="title_keep_alive_interval">Интервал поддержания активности (мин.)</string>
+    <string name="title_keep_alive_noop">Периодически перезапускать IMAP IDLE</string>
     <string name="title_server_time">Использовать время получения (сервер)</string>
     <string name="title_received_header">Использовать заголовок \"Received\"</string>
     <string name="title_date_header">Использовать заголовок \"Date\" (время отправки)</string>
@@ -1068,6 +1077,7 @@
     <string name="title_download_all">Загрузить все</string>
     <string name="title_save_all">Сохранить все</string>
     <string name="title_save_eml">Сохранить оригинальный файл сообщения</string>
+    <string name="title_save_file">Сохранить файл</string>
     <string name="title_eml_remark">Для пересылки исходные (оригинальные) сообщения необходимо загрузить с сервера электронной почты. Это требует подключения к интернету, а сами сообщения должны храниться на сервере.</string>
     <string name="title_eml_option">Это можно предотвратить, включив загрузку исходных сообщений в настройках подключения</string>
     <string name="title_eml_downloaded">Загружены исходные сообщения: %1$s</string>
@@ -1133,6 +1143,7 @@
     <string name="title_no_folder">Папка не существует</string>
     <string name="title_no_format">Исходное сообщение будет включено</string>
     <string name="title_no_search">Поиск на сервере недоступен для этой учётной записи</string>
+    <string name="title_complex_search" comment="title_complex_search&#10;This message will be shown when using a complex search (AND, OR, NOT, etc) when no folder is selected (for example the unified inbox is showing)">Выберите папку для сложного поиска</string>
     <string name="title_too_large">Сообщение слишком большое для полного переформатирования</string>
     <string name="title_truncated">Сообщение слишком велико для полного отображения</string>
     <string name="title_insufficient_memory">Сообщение слишком большое для доступной памяти (%1$d)</string>
@@ -1215,9 +1226,11 @@
     <string name="title_style_italic">Курсив</string>
     <string name="title_style_underline">Подчёркнутый</string>
     <string name="title_style_size">Размер</string>
+    <string name="title_style_size_xsmall">Очень маленький</string>
     <string name="title_style_size_small">Маленький</string>
     <string name="title_style_size_medium">Средний</string>
     <string name="title_style_size_large">Большой</string>
+    <string name="title_style_size_xlarge">Очень большой</string>
     <string name="title_style_align">Выравнивание</string>
     <string name="title_style_align_start">Слева</string>
     <string name="title_style_align_center">По центру</string>
@@ -1257,6 +1270,7 @@
     <string name="title_save_drafts">Сохранять черновики на сервере</string>
     <string name="title_send_dialog">Параметры отправки</string>
     <string name="title_image_dialog">Параметры изображения</string>
+    <string name="title_block_toolbar">Панель блоков текста</string>
     <string name="title_media_toolbar">Панель медиа</string>
     <string name="title_manage_local_contacts">Управление локальными контактами</string>
     <string name="title_insert_contact_group">Добавить группу контактов</string>
@@ -1304,6 +1318,7 @@
     <string name="title_text_reminder">Сообщение пустое</string>
     <string name="title_attachment_keywords">attached,attachment,attachments,included,вложение,вложения,вложении,приложено</string>
     <string name="title_attachment_reminder">Вы хотите добавить вложение?</string>
+    <string name="title_attachment_warning">Потенциально опасно: %1$s</string>
     <string name="title_plain_reminder">Всё форматирование будет утрачено</string>
     <string name="title_dsn_reminder">Жёсткие отказы наносят ущерб репутации электронной почты оригинального отправителя!</string>
     <string name="title_size_reminder">Сообщение (%1$s) больше, чем лимит сервера (%2$s)</string>
@@ -1450,6 +1465,7 @@
     <string name="title_answer_placeholder_email">Электронная почта отправителя</string>
     <string name="title_answer_placeholder_firstname">Имя отправителя</string>
     <string name="title_answer_placeholder_lastname">Фамилия отправителя</string>
+    <string name="title_answer_placeholder_date">Текущая дата</string>
     <string name="title_rule_noop">Нет действия</string>
     <string name="title_rule_seen">Отметить прочитанным</string>
     <string name="title_rule_unseen">Отметить непрочитанным</string>
@@ -1492,6 +1508,7 @@
     <string name="title_rule_hours">Часов</string>
     <string name="title_rule_schedule_end">До конца срока</string>
     <string name="title_rule_folder">Папка</string>
+    <string name="title_rule_folder_create">Создать подпапку</string>
     <string name="title_rule_thread">Все сообщения в одном диалоге и папке</string>
     <string name="title_rule_identity">Идентификатор</string>
     <string name="title_rule_template">Шаблон ответа</string>
@@ -1652,7 +1669,7 @@
     <string name="title_hint_folder_actions">Длительное нажатие на папку откроет другие действия, например, добавление папки в меню навигации для быстрого доступа.</string>
     <string name="title_hint_folder_sync">Для экономии заряда батареи и трафика по умолчанию синхронизируются не все папки и сообщения.</string>
     <string name="title_hint_airplane">Режим полета включён</string>
-    <string name="title_hint_notification">Уведомления отключены</string>
+    <string name="title_hint_notifications">Отсутствует разрешение на отображение уведомлений</string>
     <string name="title_hint_support">Если у вас есть вопрос или проблема, пожалуйста, используйте меню поддержки для получения помощи.</string>
     <string name="title_hint_message_actions">Смахните влево, чтобы поместить в корзину; смахните вправо, чтобы поместить в архив (если имеется); действия жестов можно изменить в настройках учётной записи.</string>
     <string name="title_hint_message_selection">Длительное нажатие на сообщение начинает выбор нескольких сообщений; удерживайте нажатие и смахните вверх или вниз, чтобы выбрать больше сообщений.</string>
@@ -1691,6 +1708,9 @@
     <string name="title_undo">Отменить</string>
     <string name="title_redo">Восстановить</string>
     <string name="title_insert_line">Вставить строку</string>
+    <string name="title_select_block">Выбор блока</string>
+    <string name="title_insert_brackets">Взять в скобки</string>
+    <string name="title_insert_quotes">Цитировать</string>
     <string name="title_add">Добавить</string>
     <string name="title_browse">В браузере</string>
     <string name="title_info">Информация</string>

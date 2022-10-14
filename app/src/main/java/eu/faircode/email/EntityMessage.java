@@ -50,6 +50,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.TimeZone;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -372,6 +373,27 @@ public class EntityMessage implements Serializable {
                         !EntityMessage.SMIME_SIGNENCRYPT.equals(encrypt));
     }
 
+    boolean isNotJunk(Context context) {
+        DB db = DB.getInstance(context);
+
+        boolean notJunk = false;
+        if (from != null)
+            for (Address sender : from) {
+                String email = ((InternetAddress) sender).getAddress();
+                if (TextUtils.isEmpty(email))
+                    continue;
+
+                EntityContact contact = db.contact().getContact(account, EntityContact.TYPE_NO_JUNK, email);
+                if (contact != null) {
+                    contact.times_contacted++;
+                    contact.last_contacted = new Date().getTime();
+                    db.contact().updateContact(contact);
+                    notJunk = true;
+                }
+            }
+        return notJunk;
+    }
+
     String[] checkFromDomain(Context context) {
         return MessageHelper.equalRootDomain(context, from, smtp_from);
     }
@@ -467,10 +489,13 @@ public class EntityMessage implements Serializable {
 
     Element getReplyHeader(Context context, Document document, boolean separate, boolean extended) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        boolean hide_timezone = prefs.getBoolean("hide_timezone", false);
         boolean language_detection = prefs.getBoolean("language_detection", false);
         String l = (language_detection ? language : null);
 
         DateFormat DTF = Helper.getDateTimeInstance(context);
+        DTF.setTimeZone(hide_timezone ? TimeZone.getTimeZone("UTC") : TimeZone.getDefault());
+        String date = (received instanceof Number ? DTF.format(received) : "-");
 
         Element p = document.createElement("p");
         if (extended) {
@@ -499,7 +524,7 @@ public class EntityMessage implements Serializable {
                 Element strong = document.createElement("strong");
                 strong.text(Helper.getString(context, l, R.string.title_date) + " ");
                 p.appendChild(strong);
-                p.appendText(DTF.format(received));
+                p.appendText(date);
                 p.appendElement("br");
             }
             if (!TextUtils.isEmpty(subject)) {
@@ -510,7 +535,7 @@ public class EntityMessage implements Serializable {
                 p.appendElement("br");
             }
         } else
-            p.text(DTF.format(new Date(received)) + " " + MessageHelper.formatAddresses(from) + ":");
+            p.text(date + " " + MessageHelper.formatAddresses(from) + ":");
 
         Element div = document.createElement("div")
                 .attr("fairemail", "reply");
@@ -552,10 +577,24 @@ public class EntityMessage implements Serializable {
     }
 
     static File getFile(Context context, Long id) {
-        File dir = new File(context.getFilesDir(), "messages");
-        if (!dir.exists())
-            dir.mkdir();
+        File root = new File(context.getFilesDir(), "messages");
+        File dir = Helper.ensureExists(new File(root, "D" + (id / 1000)));
         return new File(dir, id.toString());
+    }
+
+    static void convert(Context context) {
+        File root = new File(context.getFilesDir(), "messages");
+        List<File> files = Helper.listFiles(root);
+        for (File file : files)
+            if (file.isFile())
+                try {
+                    long id = Long.parseLong(file.getName());
+                    File target = getFile(context, id);
+                    if (!file.renameTo(target))
+                        throw new IllegalArgumentException("Failed moving " + file);
+                } catch (Throwable ex) {
+                    Log.e(ex);
+                }
     }
 
     File getFile(Context context) {
@@ -563,16 +602,12 @@ public class EntityMessage implements Serializable {
     }
 
     File getFile(Context context, int revision) {
-        File dir = new File(context.getFilesDir(), "revision");
-        if (!dir.exists())
-            dir.mkdir();
+        File dir = Helper.ensureExists(new File(context.getFilesDir(), "revision"));
         return new File(dir, id + "." + revision);
     }
 
     File getRefFile(Context context) {
-        File dir = new File(context.getFilesDir(), "references");
-        if (!dir.exists())
-            dir.mkdir();
+        File dir = Helper.ensureExists(new File(context.getFilesDir(), "references"));
         return new File(dir, id.toString());
     }
 
@@ -581,9 +616,7 @@ public class EntityMessage implements Serializable {
     }
 
     static File getRawFile(Context context, Long id) {
-        File dir = new File(context.getFilesDir(), "raw");
-        if (!dir.exists())
-            dir.mkdir();
+        File dir = Helper.ensureExists(new File(context.getFilesDir(), "raw"));
         return new File(dir, id + ".eml");
     }
 

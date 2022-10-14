@@ -9,6 +9,8 @@
     <string name="app_continue">Kontynuuj mimo to</string>
     <string name="app_exit">Użyj przycisku \'wstecz\', aby wyjść</string>
     <string name="app_cake">Za mało miejsca w pamięci</string>
+    <string name="app_cake_remaining">Pozostała ilość miejsca na urządzeniu: %1$s</string>
+    <string name="app_cake_required">Minimalna wymagana ilość miejsca na dysku: %1$s</string>
     <string name="app_updated">Ostatnia aktualizacja: %1$s</string>
     <string name="app_download">Pobrano z: %1$s</string>
     <string name="channel_service">Monitorowanie</string>
@@ -400,6 +402,7 @@
     <string name="title_advanced_signature_forward">Użyj podpisu podczas przesyłania dalej</string>
     <string name="title_advanced_discard_delete">Po odrzuceniu wersji roboczej usuń ją trwale</string>
     <string name="title_advanced_reply_move">Przy odpowiadaniu na wiadomość, zapisz odpowiedź w tym samym folderze</string>
+    <string name="title_advanced_reply_move_inbox">Również dla wiadomości w skrzynce odbiorczej</string>
     <string name="title_advanced_auto_link">Automatycznie utwórz linki</string>
     <string name="title_advanced_plain_only">Domyślnie wysyłaj czystym tekstem</string>
     <string name="title_advanced_flow">\'format flowed\' dla zwykłego tekstu</string>
@@ -416,6 +419,7 @@
     <string name="title_advanced_download_eml">Pobierz nieprzetworzone pliki wiadomości</string>
     <string name="title_advanced_download_plain">Domyślnie pobieraj tylko części w postaci zwykłego tekstu (jeśli jest dostępny)</string>
     <string name="title_advanced_validated">Wymagaj zweryfikowanego (sprawdzonego) połączenia</string>
+    <string name="title_advanced_validated_captive">Wymagaj potwierdzonego połączenia z portalem przechwytującym</string>
     <string name="title_advanced_vpn_only">Połącz tylko przez VPN</string>
     <string name="title_advanced_timeout">Limit czasu połączenia (sekundy)</string>
     <string name="title_advanced_prefer_ip4">Preferuj IPv4 nad IPv6</string>
@@ -455,6 +459,7 @@
     <string name="title_advanced_cards_shadow_highlight">Użyj koloru podświetlenia zamiast koloru akcentu</string>
     <string name="title_advanced_tabular_dividers">Używaj linii oddzielających podczas używania stylu tabelarycznego</string>
     <string name="title_advanced_date_header">Grupuj według daty</string>
+    <string name="title_advanced_date_week">Grupuj według tygodnia zamiast dnia</string>
     <string name="title_advanced_date_fixed">Pokaż stały nagłówek daty na górze</string>
     <string name="title_advanced_date_bold">Pokaż datę pogrubioną</string>
     <string name="title_advanced_threading">Konwersacje w wątkach</string>
@@ -663,6 +668,7 @@
     <string name="title_advanced_language">Język</string>
     <string name="title_advanced_language_system">Systemowy</string>
     <string name="title_advanced_lt">Integracja LanguageTool</string>
+    <string name="title_advanced_lt_auto">Sprawdź akapit po nowym wierszu</string>
     <string name="title_advanced_deepl">Integracja z DeepL</string>
     <string name="title_advanced_virus_total">Integracja z VirusTotal</string>
     <string name="title_advanced_sdcard">Chcę użyć karty SD</string>
@@ -678,6 +684,7 @@
     <string name="title_advanced_app">Ustawienia aplikacji</string>
     <string name="title_advanced_more">Więcej opcji</string>
     <string name="title_advanced_main_log">Logowanie główne</string>
+    <string name="title_advanced_main_log_mem">Rejestruj użycie pamięci</string>
     <string name="title_advanced_protocol">Rejestrowanie protokołów</string>
     <string name="title_advanced_log_info">Rejestrowanie debugowania</string>
     <string name="title_advanced_debug">Debuguj</string>
@@ -811,6 +818,7 @@
     <string name="title_account_category">Kategoria</string>
     <string name="title_account_name_hint">Używany do odróżnienia folderów</string>
     <string name="title_account_interval_hint">Częstotliwość odświeżania połączenia dla wiadomości Push lub częstotliwość sprawdzania nowych wiadomości</string>
+    <string name="title_account_noop_hint">Dzięki temu połączenie będzie odświeżane bardziej aktywnie, ale również zużyje więcej energii z baterii</string>
     <string name="title_account_partial_fetch_hint">Wyłącz to tylko w przypadku pustych wiadomości lub uszkodzonych załączników</string>
     <string name="title_color">Kolor</string>
     <string name="title_background">Tło</string>
@@ -851,6 +859,7 @@
     <string name="title_max_messages">Maksymalna liczba wiadomości do pobrania (puste dla wszystkich)</string>
     <string name="title_keep_poll_interval">Interwał sprawdzania (minuty)</string>
     <string name="title_keep_alive_interval">Interwał utrzymywania aktywności (minuty)</string>
+    <string name="title_keep_alive_noop">Okresowo restartuj IMAP IDLE</string>
     <string name="title_server_time">Użyj czasu otrzymanego (serwer)</string>
     <string name="title_received_header">Użyj nagłówka \'Odbiorca\'</string>
     <string name="title_date_header">Użyj nagłówka \'Data\' (wysłany czas)</string>
@@ -1066,6 +1075,7 @@
     <string name="title_download_all">Pobierz wszystkie</string>
     <string name="title_save_all">Zapisz wszystkie</string>
     <string name="title_save_eml">Zapisz nieprzetworzony plik wiadomości</string>
+    <string name="title_save_file">Zapisz plik</string>
     <string name="title_eml_remark">Aby przesyłać wiadomości, należy pobrać surowe (oryginalne) wiadomości z serwera e-mail. To wymaga połączenia z Internetem, a wiadomości muszą być nadal przechowywane na serwerze e-mail.</string>
     <string name="title_eml_option">Można temu zapobiec poprzez włączanie \"Pobierz nieprzetworzone pliki wiadomości\" w ustawieniach połączenia</string>
     <string name="title_eml_downloaded">Pobrano nieprzetworzone wiadomości: %1$s</string>
@@ -1131,6 +1141,7 @@
     <string name="title_no_folder">Folder nie istnieje</string>
     <string name="title_no_format">Pierwotnie odebrana wiadomość zostanie dołączona</string>
     <string name="title_no_search">Wyszukiwanie na serwerze nie jest dostępne dla tego konta</string>
+    <string name="title_complex_search" comment="title_complex_search&#10;This message will be shown when using a complex search (AND, OR, NOT, etc) when no folder is selected (for example the unified inbox is showing)">Wybierz folder dla zaawansowanego wyszukiwania</string>
     <string name="title_too_large">Wiadomość jest zbyt duża, aby całkowicie sformatować</string>
     <string name="title_truncated">Wiadomość jest za duża, aby wyświetlić ją w całości</string>
     <string name="title_insufficient_memory">Wiadomość jest zbyt duża dla dostępnej pamięci (%1$d)</string>
@@ -1212,9 +1223,11 @@
     <string name="title_style_italic">Kursywa</string>
     <string name="title_style_underline">Podkreślenie</string>
     <string name="title_style_size">Rozmiar</string>
+    <string name="title_style_size_xsmall">Bardzo mały</string>
     <string name="title_style_size_small">Mały</string>
     <string name="title_style_size_medium">Średni</string>
     <string name="title_style_size_large">Duży</string>
+    <string name="title_style_size_xlarge">Bardzo duży</string>
     <string name="title_style_align">Wyrównanie</string>
     <string name="title_style_align_start">Na początku</string>
     <string name="title_style_align_center">Wyśrodkowane</string>
@@ -1254,6 +1267,7 @@
     <string name="title_save_drafts">Zapisz szkice na serwerze</string>
     <string name="title_send_dialog">Pokaż opcje wysyłania</string>
     <string name="title_image_dialog">Pokaż opcje obrazu</string>
+    <string name="title_block_toolbar">Zablokuj pasek narzędzi</string>
     <string name="title_media_toolbar">Pasek mediów</string>
     <string name="title_manage_local_contacts">Zarządzaj kontaktami lokalnymi</string>
     <string name="title_insert_contact_group">Wstaw grupę kontaktów</string>
@@ -1301,6 +1315,7 @@
     <string name="title_text_reminder">Wiadomość jest pusta</string>
     <string name="title_attachment_keywords">załączony, załącznik, załączniki, w zestawie, w załączonym</string>
     <string name="title_attachment_reminder">Czy zamierzałeś dodać załącznik?</string>
+    <string name="title_attachment_warning">Potencjalnie niebezpieczne: %1$s</string>
     <string name="title_plain_reminder">Całe formatowanie zostanie utracone</string>
     <string name="title_dsn_reminder">\"Twarde odbicia\" szkodzą reputacji e-mail odbiorcy!</string>
     <string name="title_size_reminder">Wiadomość (%1$s) większa niż limit serwera (%2$s)</string>
@@ -1448,6 +1463,7 @@
     <string name="title_answer_placeholder_email">Adres e-mail nadawcy</string>
     <string name="title_answer_placeholder_firstname">Imię nadawcy</string>
     <string name="title_answer_placeholder_lastname">Nazwisko nadawcy</string>
+    <string name="title_answer_placeholder_date">Bieżąca data</string>
     <string name="title_rule_noop">Brak akcji</string>
     <string name="title_rule_seen">Oznacz jako przeczytane</string>
     <string name="title_rule_unseen">Oznacz jako nieprzeczytane</string>
@@ -1490,6 +1506,7 @@
     <string name="title_rule_hours">Godzin</string>
     <string name="title_rule_schedule_end">Od końca warunku czasu</string>
     <string name="title_rule_folder">Folder</string>
+    <string name="title_rule_folder_create">Utwórz podfolder</string>
     <string name="title_rule_thread">Wszystkie wiadomości w tej samej rozmowie i folderze</string>
     <string name="title_rule_identity">Tożsamość</string>
     <string name="title_rule_template">Szablon odpowiedzi</string>
@@ -1650,7 +1667,7 @@
     <string name="title_hint_folder_actions">Naciśnij długo folder, aby wyświetlić opcje, takie jak dodanie folderu do menu nawigacji w celu szybkiego dostępu</string>
     <string name="title_hint_folder_sync">W celu ograniczenia użycia baterii i sieci nie wszystkie foldery i wiadomości będą domyślnie synchronizowane</string>
     <string name="title_hint_airplane">Tryb samolotowy jest włączony</string>
-    <string name="title_hint_notification">Powiadomienia są wyłączone</string>
+    <string name="title_hint_notifications">Brak uprawnień dla powiadomień</string>
     <string name="title_hint_support">Jeśli masz pytanie lub problem, użyj menu Pomoc, aby uzyskać pomoc</string>
     <string name="title_hint_message_actions">Przesuń w lewo, aby wyrzucić do kosza; Przesuń w prawo, aby zarchiwizować (jeśli dostępne); Działania przeciągnięcia można skonfigurować w ustawieniach konta</string>
     <string name="title_hint_message_selection">Naciśnij długo wiadomość, aby rozpocząć wybieranie wielu wiadomości; Przytrzymaj i przeciągnij w górę lub w dół, aby wybrać więcej wiadomości</string>
@@ -1689,6 +1706,9 @@
     <string name="title_undo">Cofnij</string>
     <string name="title_redo">Ponów</string>
     <string name="title_insert_line">Wstaw linię</string>
+    <string name="title_select_block">Zaznacz fragment</string>
+    <string name="title_insert_brackets">Ujmij w nawias</string>
+    <string name="title_insert_quotes">Cytuj</string>
     <string name="title_add">Dodaj</string>
     <string name="title_browse">Otwórz za pomocą</string>
     <string name="title_info">Info</string>

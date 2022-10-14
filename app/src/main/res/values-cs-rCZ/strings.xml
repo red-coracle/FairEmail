@@ -9,6 +9,8 @@
     <string name="app_continue">Přesto pokračovat</string>
     <string name="app_exit">Znovu „zpět“ pro ukončení</string>
     <string name="app_cake">Nedostatek místa v úložišti</string>
+    <string name="app_cake_remaining">Zbývající úložný prostor v zařízení: %1$s</string>
+    <string name="app_cake_required">Minimální požadovaná kapacita úložiště: %1$s</string>
     <string name="app_updated">Poslední aktualizace: %1$s</string>
     <string name="app_download">Staženo z: %1$s</string>
     <string name="channel_service">Monitor</string>
@@ -400,6 +402,7 @@
     <string name="title_advanced_signature_forward">Použít podpis při přeposlání</string>
     <string name="title_advanced_discard_delete">Při zahození konceptu jej natrvalo smazat</string>
     <string name="title_advanced_reply_move">Při odpovědi na zprávu uložit odpověď do stejné složky</string>
+    <string name="title_advanced_reply_move_inbox">Také pro zprávy v Doručených</string>
     <string name="title_advanced_auto_link">Automaticky vytvářet odkazy</string>
     <string name="title_advanced_plain_only">Automaticky odeslat pouze prostý text</string>
     <string name="title_advanced_flow">„Format flowed“ pro prostý text</string>
@@ -416,6 +419,7 @@
     <string name="title_advanced_download_eml">Stáhnout zdrojové soubory zprávy</string>
     <string name="title_advanced_download_plain">Stahovat pouze prostý text (vždy v případě dostupnosti)</string>
     <string name="title_advanced_validated">Vyžadovat ověřené (zkontrolované) připojení</string>
+    <string name="title_advanced_validated_captive">Vyžadovat ověření při připojení přes captive portál</string>
     <string name="title_advanced_vpn_only">Připojit pouze pomocí VPN</string>
     <string name="title_advanced_timeout">Časový limit připojení (sekundy)</string>
     <string name="title_advanced_prefer_ip4">Upřednostňovat IPv4 před IPv6</string>
@@ -455,6 +459,7 @@
     <string name="title_advanced_cards_shadow_highlight">Použít barvu zvýraznění namísto kontrastní barvy</string>
     <string name="title_advanced_tabular_dividers">Použít dělicí čáry při použití stylu tabulky</string>
     <string name="title_advanced_date_header">Seskupit podle data</string>
+    <string name="title_advanced_date_week">Seskupit podle týdne namísto dne</string>
     <string name="title_advanced_date_fixed">Zobrazit nahoře datovou hlavičku</string>
     <string name="title_advanced_date_bold">Zobrazit datum tučně</string>
     <string name="title_advanced_threading">Vlákna konverzací</string>
@@ -663,6 +668,7 @@
     <string name="title_advanced_language">Jazyk</string>
     <string name="title_advanced_language_system">Systémový</string>
     <string name="title_advanced_lt">Integrace LanguageTool</string>
+    <string name="title_advanced_lt_auto">Zkontrolujte odstavec po novém řádku</string>
     <string name="title_advanced_deepl">DeepL integrace</string>
     <string name="title_advanced_virus_total">Integrace VirusTotal</string>
     <string name="title_advanced_sdcard">Chci použít Sd kartu</string>
@@ -678,6 +684,7 @@
     <string name="title_advanced_app">Nastavení aplikace</string>
     <string name="title_advanced_more">Více možností</string>
     <string name="title_advanced_main_log">Hlavní logování</string>
+    <string name="title_advanced_main_log_mem">Využití paměti protokolu</string>
     <string name="title_advanced_protocol">Protokolovat protokoly</string>
     <string name="title_advanced_log_info">Protokolování při ladění</string>
     <string name="title_advanced_debug">Režim ladění</string>
@@ -811,6 +818,7 @@
     <string name="title_account_category">Kategorie</string>
     <string name="title_account_name_hint">Použito k odlišení složek</string>
     <string name="title_account_interval_hint">Četnost obnovy spojení pro okamžité zprávy nebo četnost kontroly nových zpráv</string>
+    <string name="title_account_noop_hint">Tímto se připojení bude obnovovat aktivněji, ale sníží se výdrž baterie</string>
     <string name="title_account_partial_fetch_hint">Vypnout pouze v případě prázdných zpráv nebo poškozených příloh</string>
     <string name="title_color">Barva</string>
     <string name="title_background">Pozadí</string>
@@ -851,6 +859,7 @@
     <string name="title_max_messages">Maximální počet zpráv ke stažení (prázdné pro všechny)</string>
     <string name="title_keep_poll_interval">Interval dotazování (minuty)</string>
     <string name="title_keep_alive_interval">Interval udržování spojení (minuty)</string>
+    <string name="title_keep_alive_noop">Restartovat IMAP IDLE periodicky</string>
     <string name="title_server_time">Použít čas přijetí (server)</string>
     <string name="title_received_header">Použít hlavičku „přijato“</string>
     <string name="title_date_header">Použít hlavičku „datum“ (čas odeslání)</string>
@@ -1066,6 +1075,7 @@
     <string name="title_download_all">Stáhnout vše</string>
     <string name="title_save_all">Uložit vše</string>
     <string name="title_save_eml">Uložit soubor zdrojové zprávy</string>
+    <string name="title_save_file">Uložit soubor</string>
     <string name="title_eml_remark">Chcete-li přeposílat zprávy, je třeba stáhnout syrové (původní) zprávy z e-mailového serveru. To vyžaduje připojení k Internetu a zprávy musí být stále uloženy na e-mailovém serveru.</string>
     <string name="title_eml_option">Tomu lze předejít tím, že bude vždy povoleno stahování souborů syrových zpráv v nastavení připojení</string>
     <string name="title_eml_downloaded">Staženo originálních zpráv: %1$s</string>
@@ -1131,6 +1141,7 @@
     <string name="title_no_folder">Složka neexistuje</string>
     <string name="title_no_format">Původní zpráva bude zahrnuta</string>
     <string name="title_no_search">Vyhledávání na serveru není pro tento účet k dispozici</string>
+    <string name="title_complex_search" comment="title_complex_search&#10;This message will be shown when using a complex search (AND, OR, NOT, etc) when no folder is selected (for example the unified inbox is showing)">Vyberte složku pro komplexní vyhledávání</string>
     <string name="title_too_large">Zpráva je příliš velká pro úplné přeformátování</string>
     <string name="title_truncated">Zpráva je příliš velká pro úplné zobrazení</string>
     <string name="title_insufficient_memory">Zpráva je příliš velká na dostupnou paměť (%1$d)</string>
@@ -1212,9 +1223,11 @@
     <string name="title_style_italic">Kurzíva</string>
     <string name="title_style_underline">Podtržení</string>
     <string name="title_style_size">Velikost</string>
+    <string name="title_style_size_xsmall">Velmi malé</string>
     <string name="title_style_size_small">Malý</string>
     <string name="title_style_size_medium">Střední</string>
     <string name="title_style_size_large">Velký</string>
+    <string name="title_style_size_xlarge">Velmi velké</string>
     <string name="title_style_align">Zarovnání</string>
     <string name="title_style_align_start">Na začátek</string>
     <string name="title_style_align_center">Na střed</string>
@@ -1254,6 +1267,7 @@
     <string name="title_save_drafts">Ukládat koncepty na serveru</string>
     <string name="title_send_dialog">Zobrazit možnosti odeslání</string>
     <string name="title_image_dialog">Zobrazit možnosti obrázku</string>
+    <string name="title_block_toolbar">Panel nástrojů (text)</string>
     <string name="title_media_toolbar">Panel médií</string>
     <string name="title_manage_local_contacts">Správa místních kontaktů</string>
     <string name="title_insert_contact_group">Vložit skupinu kontaktů</string>
@@ -1301,6 +1315,7 @@
     <string name="title_text_reminder">Zpráva je prázdná</string>
     <string name="title_attachment_keywords">příloha,přílohy,příloze,přílohu,přiložené,přiloženém,přiložený,přiložená,připojené,připojeném,připojený,připojená</string>
     <string name="title_attachment_reminder">Měl jste v úmyslu přidat přílohu?</string>
+    <string name="title_attachment_warning">Potenciálně nebezpečné: %1$s</string>
     <string name="title_plain_reminder">Veškeré formátování bude ztraceno</string>
     <string name="title_dsn_reminder">Oznámení o nedoručitelnosti (hard bounce) poškozují e-mailovou reputaci původního odesílatele!</string>
     <string name="title_size_reminder">Zpráva (%1$s) je větší než limit serveru (%2$s)</string>
@@ -1447,6 +1462,7 @@
     <string name="title_answer_placeholder_email">E-mailová adresa odesílatele</string>
     <string name="title_answer_placeholder_firstname">Křestní jméno odesílatele</string>
     <string name="title_answer_placeholder_lastname">Příjmení odesílatele</string>
+    <string name="title_answer_placeholder_date">Aktuální datum</string>
     <string name="title_rule_noop">Žádná akce</string>
     <string name="title_rule_seen">Označit přečtené</string>
     <string name="title_rule_unseen">Označit nepřečtené</string>
@@ -1489,6 +1505,7 @@
     <string name="title_rule_hours">Hodiny</string>
     <string name="title_rule_schedule_end">Od konce časové podmínky</string>
     <string name="title_rule_folder">Složka</string>
+    <string name="title_rule_folder_create">Vytvořit podsložku</string>
     <string name="title_rule_thread">Všechny zprávy ve stejné konverzaci a složce</string>
     <string name="title_rule_identity">Identita</string>
     <string name="title_rule_template">Šablona odpovědi</string>
@@ -1649,7 +1666,7 @@
     <string name="title_hint_folder_actions">Dlouze podržet složku pro možnosti, např. přidání složky do navigačního menu pro rychlý přístup</string>
     <string name="title_hint_folder_sync">Pro omezení spotřeby baterie a dat nebudou ve výchozím stavu synchronizovány všechny zprávy ani složky</string>
     <string name="title_hint_airplane">Režim Letadlo je zapnutý</string>
-    <string name="title_hint_notification">Oznámení jsou vypnuta</string>
+    <string name="title_hint_notifications">Žádná oprávnění pro oznámení</string>
     <string name="title_hint_support">Máte-li dotaz nebo problém, použijte prosím menu podpory pro získání pomoci</string>
     <string name="title_hint_message_actions">Tažením doleva hodit do koše; Tažením doprava archivovat (je-li k dispozici); Akce tažením lze změnit v nastavení účtu</string>
     <string name="title_hint_message_selection">Dlouhým podržením zprávy zahájíte násobný výběr zpráv; Držte a táhněte nahoru či dolů pro výběr více zpráv</string>
@@ -1688,6 +1705,8 @@
     <string name="title_undo">Zpět</string>
     <string name="title_redo">Znovu</string>
     <string name="title_insert_line">Vložit řádek</string>
+    <string name="title_select_block">Vybrat blok</string>
+    <string name="title_insert_quotes">Citace</string>
     <string name="title_add">Přidat</string>
     <string name="title_browse">Otevřít s</string>
     <string name="title_info">Info</string>

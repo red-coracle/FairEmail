@@ -55,6 +55,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.LocaleList;
+import android.os.Looper;
 import android.os.Parcel;
 import android.os.PowerManager;
 import android.os.StatFs;
@@ -71,6 +72,7 @@ import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.text.format.Time;
 import android.util.DisplayMetrics;
+import android.util.Pair;
 import android.util.TypedValue;
 import android.view.ActionMode;
 import android.view.KeyEvent;
@@ -145,10 +147,13 @@ import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
@@ -174,7 +179,7 @@ public class Helper {
     static final float LOW_LIGHT = 0.6f;
 
     static final int BUFFER_SIZE = 8192; // Same as in Files class
-    static final long MIN_REQUIRED_SPACE = 250 * 1024L * 1024L;
+    static final long MIN_REQUIRED_SPACE = 100 * 1000L * 1000L;
     static final int AUTOLOCK_GRACE = 15; // seconds
     static final long PIN_FAILURE_DELAY = 3; // seconds
 
@@ -216,6 +221,25 @@ public class Helper {
                     "[\\p{L}0-9][\\p{L}0-9\\-\\_]{0,25}" +
                     ")+"
     );
+
+    // https://support.google.com/mail/answer/6590#zippy=%2Cmessages-that-have-attachments
+    static final List<String> DANGEROUS_EXTENSIONS = Collections.unmodifiableList(Arrays.asList(
+            "ade", "adp", "apk", "appx", "appxbundle",
+            "bat",
+            "cab", "chm", "cmd", "com", "cpl",
+            "dll", "dmg",
+            "ex", "ex_", "exe",
+            "hta",
+            "ins", "isp", "iso",
+            "jar", "js", "jse",
+            "lib", "lnk",
+            "mde", "msc", "msi", "msix", "msixbundle", "msp", "mst",
+            "nsh",
+            "pif", "ps1",
+            "scr", "sct", "shb", "sys",
+            "vb", "vbe", "vbs", "vxd",
+            "wsc", "wsf", "wsh"
+    ));
 
     private static final ExecutorService executor = getBackgroundExecutor(1, "helper");
 
@@ -2073,11 +2097,28 @@ public class Helper {
         return new ActionMode.Callback() {
             @Override
             public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+                try {
+                    int order = 1000;
+                    menu.add(Menu.CATEGORY_SECONDARY, R.string.title_select_block, order++,
+                            view.getContext().getString(R.string.title_select_block));
+                } catch (Throwable ex) {
+                    Log.e(ex);
+                }
                 return true;
             }
 
             @Override
             public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+                try {
+                    Pair<Integer, Integer> block = StyleHelper.getParagraph(view, true);
+                    boolean ablock = (block != null &&
+                            block.first == view.getSelectionStart() &&
+                            block.second == view.getSelectionEnd());
+                    menu.findItem(R.string.title_select_block).setVisible(!ablock);
+                } catch (Throwable ex) {
+                    Log.e(ex);
+                }
+
                 for (int i = 0; i < menu.size(); i++) {
                     MenuItem item = menu.getItem(i);
                     Intent intent = item.getIntent();
@@ -2138,6 +2179,18 @@ public class Helper {
 
             @Override
             public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+                if (item.getGroupId() == Menu.CATEGORY_SECONDARY)
+                    try {
+                        int id = item.getItemId();
+                        if (id == R.string.title_select_block) {
+                            Pair<Integer, Integer> block = StyleHelper.getParagraph(view, true);
+                            if (block != null)
+                                android.text.Selection.setSelection((Spannable) view.getText(), block.first, block.second);
+                            return true;
+                        }
+                    } catch (Throwable ex) {
+                        Log.e(ex);
+                    }
                 return false;
             }
 
@@ -2151,6 +2204,21 @@ public class Helper {
         return (c == '.' /* Latin */ || c == '。' /* Chinese */);
     }
 
+    static String trim(String value, String chars) {
+        if (value == null)
+            return null;
+
+        for (Character kar : chars.toCharArray()) {
+            String k = kar.toString();
+            while (value.startsWith(k))
+                value = value.substring(1);
+            while (value.endsWith(k))
+                value = value.substring(0, value.length() - 1);
+        }
+
+        return value;
+    }
+
     // Files
 
     static {
@@ -2158,6 +2226,21 @@ public class Helper {
     }
 
     public static native void sync();
+
+    private static final Map<File, Boolean> exists = new HashMap<>();
+
+    static File ensureExists(File dir) {
+        synchronized (exists) {
+            if (exists.containsKey(dir))
+                return dir;
+            exists.put(dir, true);
+        }
+
+        if (!dir.exists() && !dir.mkdirs())
+            throw new IllegalArgumentException("Failed to create=" + dir);
+
+        return dir;
+    }
 
     static String sanitizeFilename(String name) {
         if (name == null)
@@ -2307,6 +2390,18 @@ public class Helper {
         return size;
     }
 
+    static List<File> listFiles(File dir) {
+        List<File> result = new ArrayList<>();
+        File[] files = dir.listFiles();
+        if (files != null)
+            for (File file : files)
+                if (file.isDirectory())
+                    result.addAll(listFiles(file));
+                else
+                    result.add(file);
+        return result;
+    }
+
     static long getAvailableStorageSpace() {
         StatFs stats = new StatFs(Environment.getDataDirectory().getAbsolutePath());
         return stats.getAvailableBlocksLong() * stats.getBlockSizeLong();
@@ -2366,6 +2461,10 @@ public class Helper {
             this.buf = null;
             return in;
         }
+    }
+
+    static boolean isUiThread() {
+        return (Looper.myLooper() == Looper.getMainLooper());
     }
 
     // Cryptography

@@ -9,6 +9,8 @@
     <string name="app_continue">Συνέχεια ούτως ή άλλως</string>
     <string name="app_exit">\"Πίσω\" ξανά για έξοδο</string>
     <string name="app_cake">Ανεπαρκής χώρος αποθήκευσης</string>
+    <string name="app_cake_remaining">Υπολειπόμενος αποθηκευτικός χώρος στη συσκευή: %1$s</string>
+    <string name="app_cake_required">Ελάχιστος απαιτούμενος χώρος αποθήκευσης: %1$s</string>
     <string name="app_updated">Τελευταία ενημέρωση: %1$s</string>
     <string name="app_download">Λήφθηκε από: %1$s</string>
     <string name="channel_service">Παρακολούθηση</string>
@@ -374,6 +376,7 @@
     <string name="title_advanced_signature_forward">Χρήση υπογραφής κατά την προώθηση</string>
     <string name="title_advanced_discard_delete">Οριστική διαγραφή ενός προχείρου όταν αυτό απορρίπτεται</string>
     <string name="title_advanced_reply_move">Κατά την απάντηση ενός μηνύματος, να αποθηκεύεται η απάντηση μέσα στον ίδιο φάκελο</string>
+    <string name="title_advanced_reply_move_inbox">Το ίδιο για τα μηνύματα στα εισερχόμενα</string>
     <string name="title_advanced_auto_link">Αυτόματη δημιουργία συνδέσμων</string>
     <string name="title_advanced_plain_only">Αποστολή απλού κειμένου από προεπιλογή</string>
     <string name="title_advanced_flow">Αναπροσαρμοσμένη μορφοποίηση για απλό κείμενο</string>
@@ -390,6 +393,7 @@
     <string name="title_advanced_download_eml">Λήψη αρχείων αρχικών μηνυμάτων</string>
     <string name="title_advanced_download_plain">Να κατεβαίνουν, από προεπιλογή, μόνον τα τμήματα απλού κειμένου (εφόσον είναι διαθέσιμα)</string>
     <string name="title_advanced_validated">Απαιτείται επικυρωμένη (επαληθευμένη) σύνδεση</string>
+    <string name="title_advanced_validated_captive">Απαιτείται επαληθευμένη σύνδεση σε δεσμευτική πύλη</string>
     <string name="title_advanced_vpn_only">Σύνδεση μόνο μέσω VPN</string>
     <string name="title_advanced_timeout">Χρονικό όριο σύνδεσης (δευτερόλεπτα)</string>
     <string name="title_advanced_prefer_ip4">Να προτιμάται IPv4 παρά IPv6</string>
@@ -429,6 +433,7 @@
     <string name="title_advanced_cards_shadow_highlight">Χρήση του χρώματος επισήμανσης αντί του χρώματος έμφασης</string>
     <string name="title_advanced_tabular_dividers">Χρήση διαχωριστικών γραμμών κατά τη χρήση στιλ πίνακα</string>
     <string name="title_advanced_date_header">Ομαδοποίηση κατά ημερομηνία</string>
+    <string name="title_advanced_date_week">Ομαδοποίηση ανά εβδομάδα αντί ανά ημέρα</string>
     <string name="title_advanced_date_fixed">Προβολή κεφαλίδας σταθερής ημερομηνίας στην κορυφή</string>
     <string name="title_advanced_date_bold">Προβολή ημερομηνίας με έντονους χαρακτήρες</string>
     <string name="title_advanced_threading">Ομαδοποίηση συζητήσεων σε νήματα</string>
@@ -636,6 +641,7 @@
     <string name="title_advanced_language">Γλώσσα</string>
     <string name="title_advanced_language_system">Σύστημα</string>
     <string name="title_advanced_lt">Ενσωμάτωση του LanguageTool</string>
+    <string name="title_advanced_lt_auto">Έλεγχος της παραγράφου μετά από μία νέα γραμμή</string>
     <string name="title_advanced_deepl">Ενσωμάτωση DeepL</string>
     <string name="title_advanced_virus_total">Ενσωμάτωση του VirusTotal</string>
     <string name="title_advanced_sdcard">Θέλω να χρησιμοποιήσω μια κάρτα SD</string>
@@ -650,6 +656,7 @@
     <string name="title_advanced_app">Ρυθμίσεις εφαρμογής</string>
     <string name="title_advanced_more">Περισσότερες επιλογές</string>
     <string name="title_advanced_main_log">Κύρια καταγραφή</string>
+    <string name="title_advanced_main_log_mem">Καταγραφή χρήσης μνήμης</string>
     <string name="title_advanced_protocol">Τήρηση αρχείων καταγραφής πρωτοκόλλου</string>
     <string name="title_advanced_log_info">Καταγραφές αποσφαλμάτωσης</string>
     <string name="title_advanced_debug">Λειτουργία αποσφαλμάτωσης</string>
@@ -783,6 +790,7 @@
     <string name="title_account_category">Κατηγορία</string>
     <string name="title_account_name_hint">Χρησιμοποιείται για τη διαφοροποίηση φακέλων</string>
     <string name="title_account_interval_hint">Συχνότητα ανανέωσης της σύνδεσης για μηνύματα ώθησης (push) ή συχνότητα ελέγχου για νέα μηνύματα</string>
+    <string name="title_account_noop_hint">Αυτό θα ανανεώνει τη σύνδεση πιο ενεργά, αλλά θα χρησιμοποιεί, επίσης, περισσότερη μπαταρία</string>
     <string name="title_account_partial_fetch_hint">Απενεργοποιήστε το μόνο σε περιπτώσεις κενών μηνυμάτων ή χαλασμένων συνημμένων</string>
     <string name="title_color">Χρώμα</string>
     <string name="title_background">Φόντο</string>
@@ -823,6 +831,7 @@
     <string name="title_max_messages">Μέγιστος αριθμός μηνυμάτων για κατέβασμα (κενό για όλα)</string>
     <string name="title_keep_poll_interval">Χρονικό διάστημα μεταξύ συγχρονισμών (λεπτά)</string>
     <string name="title_keep_alive_interval">Μεσοδιάστημα διατήρησης ενεργούς σύνδεσης (λεπτά)</string>
+    <string name="title_keep_alive_noop">Επανεκκίνηση IMAP IDLE περιοδικά</string>
     <string name="title_server_time">Χρήση της ώρας λήψης (διακομιστής)</string>
     <string name="title_received_header">Χρήση της κεφαλίδας \"Λήφθηκε\"</string>
     <string name="title_date_header">Χρήση κεφαλίδας \"Ημερομηνία\" (ώρα αποστολής)</string>
@@ -1038,6 +1047,7 @@
     <string name="title_download_all">Κατέβασμα όλων</string>
     <string name="title_save_all">Αποθήκευση όλων</string>
     <string name="title_save_eml">Αποθήκευση αρχείου αρχικού μηνύματος</string>
+    <string name="title_save_file">Αποθήκευση αρχείου</string>
     <string name="title_eml_remark">Για να προωθήσετε μηνύματα, τα ακατέργαστα (αρχικά) μηνύματα πρέπει να κατέβουν από τον διακομιστή ηλεκτρονικού ταχυδρομείου. Απαιτείται σύνδεση στο διαδίκτυο για αυτό και τα μηνύματα πρέπει να εξακολουθούν να είναι αποθηκευμένα στον διακομιστή ηλ. ταχυδρομείου.</string>
     <string name="title_eml_option">Αυτό μπορεί να αποφευχθεί, ενεργοποιώντας να γίνεται πάντα λήψη των αρχείων αρχικών μηνυμάτων στις ρυθμίσεις σύνδεσης</string>
     <string name="title_eml_downloaded">Αρχικά μηνύματα που κατέβηκαν: %1$s</string>
@@ -1103,6 +1113,7 @@
     <string name="title_no_folder">Ο φάκελος δεν υπάρχει</string>
     <string name="title_no_format">Θα συμπεριληφθεί το μήνυμα που λήφθηκε αρχικά</string>
     <string name="title_no_search">Η αναζήτηση στο διακομιστή δεν είναι διαθέσιμη για αυτόν το λογαριασμό</string>
+    <string name="title_complex_search" comment="title_complex_search&#10;This message will be shown when using a complex search (AND, OR, NOT, etc) when no folder is selected (for example the unified inbox is showing)">Επιλέξτε έναν φάκελο για μια σύνθετη αναζήτηση</string>
     <string name="title_too_large">Το μήνυμα είναι υπερβολικά μεγάλο για να αναμορφοποιηθεί πλήρως</string>
     <string name="title_truncated">Το μύνημα είναι πολύ μεγάλο για να προβληθεί ολόκληρο</string>
     <string name="title_insufficient_memory">Υπερβολικά μεγάλο μήνυμα για τη διαθέσιμη μνήμη (%1$d)</string>
@@ -1184,9 +1195,11 @@
     <string name="title_style_italic">Πλάγια</string>
     <string name="title_style_underline">Υπογράμμιση</string>
     <string name="title_style_size">Μέγεθος</string>
+    <string name="title_style_size_xsmall">Πολύ μικρό</string>
     <string name="title_style_size_small">Μικρά</string>
     <string name="title_style_size_medium">Μεσαία</string>
     <string name="title_style_size_large">Μεγάλα</string>
+    <string name="title_style_size_xlarge">Πολύ μεγάλο</string>
     <string name="title_style_align">Στοίχιση</string>
     <string name="title_style_align_start">Αρχή</string>
     <string name="title_style_align_center">Κέντρο</string>
@@ -1226,6 +1239,7 @@
     <string name="title_save_drafts">Να αποθηκεύονται τα πρόχειρα στον εξυπηρετητή</string>
     <string name="title_send_dialog">Προβολή επιλογών αποστολής</string>
     <string name="title_image_dialog">Προβολή επιλογών εικόνας</string>
+    <string name="title_block_toolbar">Γραμμή εργαλείων επιλεγμένου κειμένου</string>
     <string name="title_media_toolbar">Γραμμή εργαλείων πολυμέσων</string>
     <string name="title_manage_local_contacts">Διαχείριση τοπικών επαφών</string>
     <string name="title_insert_contact_group">Εισαγωγή ομάδας επαφών</string>
@@ -1273,6 +1287,7 @@
     <string name="title_text_reminder">Το μήνυμα είναι κενό</string>
     <string name="title_attachment_keywords">συνημμένο, συνημμένα, επισυνάπτω, επισυνάπτεται, επισυνάπονται, έγγραφο, έγγραφα, αρχείο, αρχεία, έντυπο, έντυπα, δικαιολογητικό, δικαιολογητικά, πιστοποιητικό, πιστοποιητικά, βιογραφικό, συνοδευτική επιστολή</string>
     <string name="title_attachment_reminder">Θα θέλατε να προσθέσετε ένα συνημμένο;</string>
+    <string name="title_attachment_warning">Δυνητικά επικίνδυνο: %1$s</string>
     <string name="title_plain_reminder">Όλη η μορφοποίηση θα χαθεί</string>
     <string name="title_dsn_reminder">Οι σκληρές αναπηδήσεις (hard bounces) βλάπτουν την αξιοπιστία της ηλ. διεύθυνσης του αρχικού αποστολέα!</string>
     <string name="title_size_reminder">Μήνυμα (%1$s) πιο μεγάλο από το όριο του διακομιστή (%2$s)</string>
@@ -1419,6 +1434,7 @@
     <string name="title_answer_placeholder_email">Διεύθυνση ηλ. ταχυδρομείου αποστολέα</string>
     <string name="title_answer_placeholder_firstname">Όνομα αποστολέα</string>
     <string name="title_answer_placeholder_lastname">Επίθετο αποστολέα</string>
+    <string name="title_answer_placeholder_date">Τρέχουσα ημερομηνία</string>
     <string name="title_rule_noop">Καμία ενέργεια</string>
     <string name="title_rule_seen">Σήμανση ως αναγνωσμένου</string>
     <string name="title_rule_unseen">Σήμανση ως μη αναγνωσμένου</string>
@@ -1461,6 +1477,7 @@
     <string name="title_rule_hours">Ώρες</string>
     <string name="title_rule_schedule_end">Από το τέλος της συνθήκης χρόνου</string>
     <string name="title_rule_folder">Φάκελος</string>
+    <string name="title_rule_folder_create">Δημιουργία υποφακέλου</string>
     <string name="title_rule_thread">Όλα τα μηνύματα στην ίδια συζήτηση και τον ίδιο φάκελο</string>
     <string name="title_rule_identity">Ταυτότητα</string>
     <string name="title_rule_template">Πρότυπο απάντησης</string>
@@ -1621,7 +1638,7 @@
     <string name="title_hint_folder_actions">Παρατεταμένο πάτημα σε έναν φάκελο για επιλογές, όπως προσθήκη ενός φακέλου στο μενού πλοήγησης για γρήγορη πρόσβαση</string>
     <string name="title_hint_folder_sync">Για να μειωθεί η χρήση μπαταρίας και δικτύου δεν συγχρονίζονται όλοι οι φάκελοι και όλα τα μηνύματα από προεπιλογή</string>
     <string name="title_hint_airplane">Η λειτουργία πτήσης είναι ενεργοποιημένη</string>
-    <string name="title_hint_notification">Οι ειδοποιήσεις είναι απενεργοποιημένες</string>
+    <string name="title_hint_notifications">Δεν έχει δοθεί καμία άδεια ειδοποιήσεων</string>
     <string name="title_hint_support">Αν έχετε μία ερώτηση ή ένα πρόβλημα, παρακαλώ χρησιμοποιήστε το μενού \"Υποστήριξη\" για να λάβετε βοήθεια</string>
     <string name="title_hint_message_actions">Σάρωση αριστερά για απορρίμματα• σάρωση δεξιά για αρχειοθέτηση (αν είναι διαθέσιμη)• μπορείτε να ρυθμίσετε τις ενέργειες σάρωσης στις ρυθμίσεις του λογαριασμού</string>
     <string name="title_hint_message_selection">Πατήστε παρατεταμένα σε ένα μήνυμα για να αρχίσετε να επιλέγετε πολλαπλά μηνύματα. Συνεχίστε το πάτημα και σύρετε προς τα πάνω ή κάτω για να επιλέξετε περισσότερα μηνύματα</string>
@@ -1660,6 +1677,9 @@
     <string name="title_undo">Αναίρεση</string>
     <string name="title_redo">Επαναφορά</string>
     <string name="title_insert_line">Εισαγωγή γραμμής</string>
+    <string name="title_select_block">Επιλογή τμήματος</string>
+    <string name="title_insert_brackets">Σε αγκύλες</string>
+    <string name="title_insert_quotes">Παράθεση</string>
     <string name="title_add">Προσθήκη</string>
     <string name="title_browse">Άνοιγμα με</string>
     <string name="title_info">Πληροφορίες</string>

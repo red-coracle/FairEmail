@@ -48,6 +48,7 @@ import javax.mail.Address;
 import javax.mail.internet.InternetAddress;
 
 public class MessageClassifier {
+    private static int version = 3;
     private static boolean loaded = false;
     private static boolean dirty = false;
     private static final Map<Long, List<String>> accountMsgIds = new HashMap<>();
@@ -115,7 +116,8 @@ public class MessageClassifier {
 
                     EntityFolder dest = db.folder().getFolderByName(folder.account, classified);
                     if (dest != null && dest.auto_classify_target &&
-                            (pro || EntityFolder.JUNK.equals(dest.type))) {
+                            (pro || EntityFolder.JUNK.equals(dest.type)) &&
+                            (!EntityFolder.JUNK.equals(dest.type) || !message.isNotJunk(context))) {
                         EntityOperation.queue(context, message, EntityOperation.KEYWORD, MessageHelper.FLAG_CLASSIFIED, true);
                         EntityOperation.queue(context, message, EntityOperation.MOVE, dest.id, false, true);
                         message.ui_hide = true;
@@ -171,7 +173,8 @@ public class MessageClassifier {
             texts.add(message.subject);
 
         String text = HtmlHelper.getFullText(file);
-        texts.add(text);
+        if (text != null)
+            texts.add(text);
 
         return texts;
     }
@@ -413,6 +416,8 @@ public class MessageClassifier {
 
         long start = new Date().getTime();
 
+        reduce();
+
         File file = getFile(context, false);
         File backup = getFile(context, true);
         backup.delete();
@@ -423,7 +428,8 @@ public class MessageClassifier {
         try (JsonWriter writer = new JsonWriter(new BufferedWriter(new FileWriter(file)))) {
             writer.beginObject();
 
-            writer.name("version").value(2);
+            Log.i("Classifier write version=" + version);
+            writer.name("version").value(version);
 
             writer.name("messages");
             writer.beginArray();
@@ -515,13 +521,15 @@ public class MessageClassifier {
     private static synchronized void _load(File file) throws IOException {
         Log.i("Classifier read " + file);
         long start = new Date().getTime();
+        version = 0;
         if (file.exists())
             try (JsonReader reader = new JsonReader(new BufferedReader(new FileReader(file)))) {
                 reader.beginObject();
                 while (reader.hasNext())
                     switch (reader.nextName()) {
                         case "version":
-                            reader.nextInt();
+                            version = reader.nextInt();
+                            Log.i("Classifier read version=" + version);
                             break;
 
                         case "messages":
@@ -646,11 +654,65 @@ public class MessageClassifier {
                 reader.endObject();
             }
 
+        reduce();
+
         loaded = true;
         dirty = false;
 
         long elapsed = new Date().getTime() - start;
         Log.i("Classifier data loaded elapsed=" + elapsed);
+    }
+
+    private static void reduce() {
+        Log.i("Classifier reduce");
+        for (long account : wordClassFrequency.keySet()) {
+            Map<String, Long> total = new HashMap<>();
+            Map<String, Integer> count = new HashMap<>();
+
+            for (String word : wordClassFrequency.get(account).keySet())
+                for (String clazz : wordClassFrequency.get(account).get(word).keySet()) {
+                    int f = wordClassFrequency.get(account).get(word).get(clazz).count;
+
+                    if (!total.containsKey(clazz))
+                        total.put(clazz, 0L);
+                    total.put(clazz, total.get(clazz) + f);
+
+                    if (!count.containsKey(clazz))
+                        count.put(clazz, 0);
+                    count.put(clazz, count.get(clazz) + 1);
+                }
+
+            for (String word : wordClassFrequency.get(account).keySet())
+                for (String clazz : new ArrayList<>(wordClassFrequency.get(account).get(word).keySet())) {
+                    long avg = total.get(clazz) / count.get(clazz);
+                    Frequency freq = wordClassFrequency.get(account).get(word).get(clazz);
+                    if (freq.count < avg / 2) {
+                        Log.i("Classifier dropping account=" + account +
+                                " word=" + word + " class=" + clazz + " freq=" + freq.count + " avg=" + avg);
+                        wordClassFrequency.get(account).get(word).remove(clazz);
+                    } else if (version >= 3) {
+                        for (String b : new ArrayList<>(freq.before.keySet()))
+                            if (freq.before.get(b) < freq.count / 20)
+                                freq.before.remove(b);
+                        for (String a : new ArrayList<>(freq.after.keySet()))
+                            if (freq.after.get(a) < freq.count / 20)
+                                freq.after.remove(a);
+                    }
+                }
+
+            // Source 47 MB
+
+            // avg/1 = 21.3
+            // avg/2 = 25.5
+            // avg/3 = 29.0
+            // avg/5 = 34.6
+
+            // ba/5  = 27.2
+            // ba/10 = 29.3
+            // ba/20 = 31.5
+
+            // avg/2 + ba/20 = 10 MB
+        }
     }
 
     static synchronized void cleanup(@NonNull Context context) {

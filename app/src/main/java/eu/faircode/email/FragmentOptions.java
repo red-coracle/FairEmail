@@ -136,7 +136,7 @@ public class FragmentOptions extends FragmentBase {
             "portrait2", "portrait2c", "portrait_min_size", "landscape", "landscape_min_size",
             "column_width",
             "nav_categories", "nav_count", "nav_unseen_drafts", "nav_count_pinned", "navbar_colorize",
-            "indentation", "date", "date_fixed", "date_bold", "threading", "threading_unread",
+            "indentation", "date", "date_week", "date_fixed", "date_bold", "threading", "threading_unread",
             "highlight_unread", "highlight_color", "color_stripe", "color_stripe_wide",
             "avatars", "bimi", "favicons", "generated_icons", "identicons", "circular", "saturation", "brightness", "threshold",
             "authentication", "authentication_indicator",
@@ -286,6 +286,8 @@ public class FragmentOptions extends FragmentBase {
 
                     pager.setCurrentItem(tab);
                     FragmentBase fragment = (FragmentBase) adapter.instantiateItem(pager, tab);
+                    if (fragment instanceof FragmentSetup)
+                        ((FragmentSetup) fragment).prepareSearch();
                     fragment.scrollTo(resid, -48);
                     menuSearch.collapseActionView();
 

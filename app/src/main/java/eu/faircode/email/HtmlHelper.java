@@ -111,6 +111,7 @@ import java.io.InputStream;
 import java.io.StringReader;
 import java.net.URI;
 import java.text.DateFormat;
+import java.text.Normalizer;
 import java.text.ParseException;
 import java.text.ParsePosition;
 import java.util.ArrayList;
@@ -122,6 +123,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -548,6 +550,7 @@ public class HtmlHelper {
                 .addAttributes("tr", "width")
                 .addAttributes("tr", "height")
                 .addAttributes(":all", "title")
+                .addAttributes("blockquote", "type")
                 .removeAttributes("td", "colspan", "rowspan", "width")
                 .removeAttributes("th", "colspan", "rowspan", "width")
                 .addProtocols("img", "src", "cid")
@@ -2551,6 +2554,10 @@ public class HtmlHelper {
         if ("true".equals(e.attr("x-border")))
             return true;
 
+        // https://groups.google.com/g/mozilla.support.thunderbird/c/rwLNk3MU3Gs?pli=1
+        if ("cite".equals(e.attr("type")))
+            return true;
+
         String style = e.attr("style");
         String[] params = style.split(";");
         for (String param : params) {
@@ -2643,6 +2650,49 @@ public class HtmlHelper {
                 if ("blockquote".equals(node.nodeName()))
                     level--;
 
+                return FilterResult.CONTINUE;
+            }
+        });
+    }
+
+    static void removeSignatures(Document d) {
+        d.body().filter(new NodeFilter() {
+            private boolean remove = false;
+            private boolean noremove = false;
+
+            @Override
+            public FilterResult head(Node node, int depth) {
+                if (node instanceof TextNode) {
+                    TextNode tnode = (TextNode) node;
+                    String text = tnode.getWholeText()
+                            .replaceAll("[\r\n]+$", "")
+                            .replaceAll("^[\r\n]+", "");
+                    if ("-- ".equals(text)) {
+                        if (tnode.getWholeText().endsWith("\n"))
+                            remove = true;
+                        else {
+                            Node next = node.nextSibling();
+                            if (next == null) {
+                                Node parent = node.parent();
+                                if (parent != null)
+                                    next = parent.nextSibling();
+                            }
+                            if (next != null && "br".equals(next.nodeName()))
+                                remove = true;
+                        }
+                    }
+                } else if (node instanceof Element) {
+                    Element element = (Element) node;
+                    if (remove && "blockquote".equals(element.tagName()))
+                        noremove = true;
+                }
+
+                return (remove && !noremove
+                        ? FilterResult.REMOVE : FilterResult.CONTINUE);
+            }
+
+            @Override
+            public FilterResult tail(Node node, int depth) {
                 return FilterResult.CONTINUE;
             }
         });
@@ -2886,52 +2936,76 @@ public class HtmlHelper {
         return ssb;
     }
 
-    static Document highlightSearched(Context context, Document document, String searched) {
-        String find = searched.toLowerCase();
+    static Document highlightSearched(Context context, Document document, String query) {
         int color = Helper.resolveColor(context, R.attr.colorHighlight);
+        query = Normalizer.normalize(query, Normalizer.Form.NFKD)
+                .replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
 
-        NodeTraversor.traverse(new NodeVisitor() {
-            @Override
-            public void head(Node node, int depth) {
-                if (node instanceof TextNode) {
-                    TextNode tnode = (TextNode) node;
-                    String text = tnode.getWholeText();
+        // TODO: fix highlighting pre processed text
 
-                    int start = text.toLowerCase().indexOf(find);
-                    if (start < 0)
-                        return;
+        List<String> word = new ArrayList<>();
+        List<String> plus = new ArrayList<>();
+        for (String w : query.trim().split("\\s+"))
+            if (w.length() > 1 && (w.startsWith("+") || w.startsWith("-"))) {
+                if (w.startsWith("+"))
+                    plus.add(w.substring(1));
+            } else
+                word.add(w);
 
-                    int prev = 0;
-                    Element holder = document.createElement("span");
+        int flags = Pattern.DOTALL | Pattern.CASE_INSENSITIVE;
+        List<Pattern> pat = new ArrayList<>();
+        pat.add(Pattern.compile(".*?\\b(" + TextUtils.join("\\s+", word) + ")\\b.*?", flags));
+        for (String w : plus)
+            pat.add(Pattern.compile(".*?\\b(" + w + ")\\b.*?", flags));
 
-                    while (start >= 0) {
-                        if (start > prev)
-                            holder.appendText(text.substring(prev, start));
+        for (Pattern p : pat)
+            NodeTraversor.traverse(new NodeVisitor() {
+                @Override
+                public void head(Node node, int depth) {
+                    if (node instanceof TextNode)
+                        try {
+                            TextNode tnode = (TextNode) node;
+                            String text = Normalizer.normalize(tnode.getWholeText(), Normalizer.Form.NFKD)
+                                    .replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
 
-                        Element span = document.createElement("span");
-                        span.attr("style", mergeStyles(
-                                span.attr("style"),
-                                "font-size:larger; background-color:" + encodeWebColor(color)
-                        ));
-                        span.text(text.substring(start, start + find.length()));
-                        holder.appendChild(span);
+                            Matcher result = p.matcher(text);
 
-                        prev = start + find.length();
-                        start = text.toLowerCase().indexOf(find, prev);
-                    }
+                            int prev = 0;
+                            Element holder = document.createElement("span");
+                            while (result.find()) {
+                                int start = result.start(1);
+                                int end = result.end(1);
 
-                    if (prev < text.length())
-                        holder.appendText(text.substring(prev));
+                                holder.appendText(text.substring(prev, start));
 
-                    tnode.before(holder);
-                    tnode.text("");
+                                Element span = document.createElement("span");
+                                span.attr("style", mergeStyles(
+                                        span.attr("style"),
+                                        "font-size:larger; background-color:" + encodeWebColor(color)
+                                ));
+                                span.text(text.substring(start, end));
+                                holder.appendChild(span);
+
+                                prev = end;
+                            }
+
+                            if (prev == 0) // No matches
+                                return;
+
+                            if (prev < text.length())
+                                holder.appendText(text.substring(prev));
+
+                            tnode.before(holder);
+                            tnode.text("");
+                        } catch (Throwable ex) {
+                            Log.e(ex);
+                        }
                 }
-            }
 
-            @Override
-            public void tail(Node node, int depth) {
-            }
-        }, document);
+                @Override
+                public void tail(Node node, int depth) {
+                }
+            }, document);
 
         return document;
     }

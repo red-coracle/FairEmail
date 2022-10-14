@@ -130,6 +130,8 @@ public class EntityAccount extends EntityOrder implements Serializable {
     @NonNull
     public Integer poll_interval = DEFAULT_KEEP_ALIVE_INTERVAL;
     @NonNull
+    public Boolean keep_alive_noop = false;
+    @NonNull
     public Boolean keep_alive_ok = false;
     @NonNull
     public Integer keep_alive_failed = 0;
@@ -305,6 +307,7 @@ public class EntityAccount extends EntityOrder implements Serializable {
         json.put("move_to", move_to);
 
         json.put("poll_interval", poll_interval);
+        json.put("keep_alive_noop", keep_alive_noop);
         json.put("partial_fetch", partial_fetch);
         json.put("ignore_size", ignore_size);
         json.put("use_date", use_date);
@@ -394,6 +397,7 @@ public class EntityAccount extends EntityOrder implements Serializable {
             account.move_to = json.getLong("move_to");
 
         account.poll_interval = json.getInt("poll_interval");
+        account.keep_alive_noop = json.optBoolean("keep_alive_noop");
 
         account.partial_fetch = json.optBoolean("partial_fetch", true);
         account.ignore_size = json.optBoolean("ignore_size", false);

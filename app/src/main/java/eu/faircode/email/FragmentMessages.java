@@ -98,6 +98,7 @@ import android.util.Base64;
 import android.util.LongSparseArray;
 import android.util.Pair;
 import android.util.TypedValue;
+import android.view.GestureDetector;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -341,6 +342,7 @@ public class FragmentMessages extends FragmentBase
     private boolean dividers;
     private boolean category;
     private boolean date;
+    private boolean date_week;
     private boolean date_fixed;
     private boolean date_bold;
     private boolean threading;
@@ -481,6 +483,7 @@ public class FragmentMessages extends FragmentBase
         dividers = prefs.getBoolean("dividers", true);
         category = prefs.getBoolean("group_category", false);
         date = prefs.getBoolean("date", true);
+        date_week = prefs.getBoolean("date_week", false);
         date_fixed = (!date && prefs.getBoolean("date_fixed", false));
         date_bold = prefs.getBoolean("date_bold", false);
         threading = (prefs.getBoolean("threading", true) ||
@@ -520,7 +523,8 @@ public class FragmentMessages extends FragmentBase
             setTitle(server ? R.string.title_search_server : R.string.title_search_device);
         }
 
-        if (viewType != AdapterMessage.ViewType.THREAD && EntityFolder.ARCHIVE.equals(type))
+        if (viewType != AdapterMessage.ViewType.THREAD &&
+                (EntityFolder.ARCHIVE.equals(type) || viewType == AdapterMessage.ViewType.SEARCH))
             filter_archive = false;
 
         try {
@@ -945,8 +949,8 @@ public class FragmentMessages extends FragmentBase
                     cal1.setTimeInMillis(message.received);
                     int year0 = cal0.get(Calendar.YEAR);
                     int year1 = cal1.get(Calendar.YEAR);
-                    int day0 = cal0.get(Calendar.DAY_OF_YEAR);
-                    int day1 = cal1.get(Calendar.DAY_OF_YEAR);
+                    int day0 = cal0.get(date_week ? Calendar.WEEK_OF_YEAR : Calendar.DAY_OF_YEAR);
+                    int day1 = cal1.get(date_week ? Calendar.WEEK_OF_YEAR : Calendar.DAY_OF_YEAR);
                     if (year0 == year1 && day0 == day1)
                         dh = false;
                 }
@@ -979,7 +983,9 @@ public class FragmentMessages extends FragmentBase
                         vSeparator.setVisibility(View.GONE);
                     }
 
-                    tvDate.setText(getRelativeDate(message.received, parent.getContext()));
+                    tvDate.setText(date_week
+                            ? getWeek(message.received, parent.getContext())
+                            : getRelativeDate(message.received, parent.getContext()));
 
                     view.setContentDescription(tvDate.getText().toString());
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
@@ -1015,8 +1021,86 @@ public class FragmentMessages extends FragmentBase
                             DAY_IN_MILLIS, 0);
                 return (rtime == null ? "" : rtime.toString());
             }
+
+            @NonNull
+            String getWeek(long time, Context context) {
+                StringBuilder sb = new StringBuilder();
+                Calendar cal = Calendar.getInstance();
+                cal.setTimeInMillis(time);
+                sb.append(cal.get(Calendar.YEAR)).append("-W").append(cal.get(Calendar.WEEK_OF_YEAR));
+                cal.set(Calendar.DAY_OF_WEEK, 1);
+                sb.append(' ').append(Helper.getDateInstance(context).format(cal.getTimeInMillis()));
+                return sb.toString();
+            }
         };
         rvMessage.addItemDecoration(dateDecorator);
+
+        rvMessage.addOnItemTouchListener(new RecyclerView.OnItemTouchListener() {
+            private final GestureDetector gestureDetector =
+                    new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
+                        @Override
+                        public void onLongPress(@NonNull MotionEvent e) {
+                            if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+                                return;
+
+                            int x = Math.round(e.getX());
+                            int y = Math.round(e.getY());
+
+                            Rect rect = new Rect();
+                            for (int i = 0; i < rvMessage.getChildCount(); i++) {
+                                View child = rvMessage.getChildAt(i);
+                                if (child == null)
+                                    continue;
+
+                                dateDecorator.getItemOffsets(rect, child, rvMessage, null);
+                                if (rect.height() == 0)
+                                    continue;
+
+                                rect.set(child.getLeft(), child.getTop() - rect.top, child.getRight(), child.getTop());
+                                if (!rect.contains(x, y))
+                                    continue;
+
+                                int pos = rvMessage.getChildAdapterPosition(child);
+                                if (pos == NO_POSITION)
+                                    continue;
+
+                                TupleMessageEx message = adapter.getItemAtPosition(pos);
+                                if (message == null)
+                                    continue;
+
+                                Calendar cal = Calendar.getInstance();
+                                cal.setTimeInMillis(message.received);
+                                cal.set(Calendar.HOUR_OF_DAY, 0);
+                                cal.set(Calendar.MINUTE, 0);
+                                cal.set(Calendar.SECOND, 0);
+                                cal.set(Calendar.MILLISECOND, 0);
+
+                                cal.add(Calendar.DATE, 1);
+                                long to = cal.getTimeInMillis();
+
+                                cal.add(Calendar.DATE, date_week ? -7 : -1);
+                                long from = cal.getTimeInMillis();
+
+                                onMenuSelect(from, to, true);
+                                return;
+                            }
+                        }
+                    });
+
+            @Override
+            public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
+                gestureDetector.onTouchEvent(e);
+                return false;
+            }
+
+            @Override
+            public void onTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
+            }
+
+            @Override
+            public void onRequestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+            }
+        });
 
         rvMessage.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
@@ -1582,6 +1666,7 @@ public class FragmentMessages extends FragmentBase
 
                     private void searchAccount(long account) {
                         Bundle aargs = new Bundle();
+                        aargs.putInt("icon", R.drawable.twotone_search_24);
                         aargs.putString("title", getString(R.string.title_search_in));
                         aargs.putLong("account", account);
                         aargs.putLongArray("disabled", new long[]{});
@@ -1925,6 +2010,7 @@ public class FragmentMessages extends FragmentBase
                                 triggered = true;
 
                                 Bundle args = new Bundle();
+                                args.putInt("icon", R.drawable.twotone_drive_file_move_24);
                                 args.putString("title", getString(R.string.title_move_to_folder));
                                 args.putLong("account", account);
                                 args.putString("thread", thread);
@@ -2759,89 +2845,106 @@ public class FragmentMessages extends FragmentBase
 
         @Override
         public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-            int pos = viewHolder.getAdapterPosition();
-            if (pos == NO_POSITION) {
-                adapter.notifyDataSetChanged();
-                return;
-            }
-
-            TupleMessageEx message = getMessage(pos);
-            if (message == null) {
-                adapter.notifyDataSetChanged();
-                return;
-            }
-
-            boolean expanded = iProperties.getValue("expanded", message.id);
-
-            if (expanded && swipe_reply) {
-                adapter.notifyItemChanged(pos);
-                onMenuReply(message, "reply", null);
-                return;
-            }
-
-            if (EntityFolder.OUTBOX.equals(message.folderType)) {
-                ActivityCompose.undoSend(message.id, getContext(), getViewLifecycleOwner(), getParentFragmentManager());
-                return;
-            }
-
-            TupleAccountSwipes swipes = accountSwipes.get(message.account);
-            if (swipes == null) {
-                adapter.notifyDataSetChanged();
-                return;
-            }
-
-            if (message.accountProtocol != EntityAccount.TYPE_IMAP) {
-                if (swipes.swipe_right == null)
-                    swipes.swipe_right = EntityMessage.SWIPE_ACTION_SEEN;
-                if (swipes.swipe_left == null)
-                    swipes.swipe_left = EntityMessage.SWIPE_ACTION_DELETE;
-            }
-
-            Long action = (direction == ItemTouchHelper.LEFT ? swipes.swipe_left : swipes.swipe_right);
-            String actionType = (direction == ItemTouchHelper.LEFT ? swipes.left_type : swipes.right_type);
-            if (action == null) {
-                adapter.notifyDataSetChanged();
-                return;
-            }
-
-            if (message.uid == null &&
-                    message.accountProtocol == EntityAccount.TYPE_IMAP &&
-                    EntityFolder.DRAFTS.equals(message.folderType) &&
-                    EntityFolder.TRASH.equals(actionType)) {
-                action = EntityMessage.SWIPE_ACTION_DELETE;
-                actionType = null;
-            }
-
-            Log.i("Swiped dir=" + direction + " message=" + message.id);
-
-            if (EntityMessage.SWIPE_ACTION_ASK.equals(action)) {
-                adapter.notifyItemChanged(pos);
-                onSwipeAsk(message, viewHolder);
-            } else if (EntityMessage.SWIPE_ACTION_SEEN.equals(action))
-                onActionSeenSelection(message.unseen > 0, message.id, false);
-            else if (EntityMessage.SWIPE_ACTION_FLAG.equals(action))
-                onActionFlagSelection(!message.ui_flagged, Color.TRANSPARENT, message.id, false);
-            else if (EntityMessage.SWIPE_ACTION_SNOOZE.equals(action))
-                if (ActivityBilling.isPro(getContext()))
-                    onActionSnooze(message);
-                else {
-                    adapter.notifyItemChanged(pos);
-                    startActivity(new Intent(getContext(), ActivityBilling.class));
+            try {
+                int pos = viewHolder.getAdapterPosition();
+                if (pos == NO_POSITION) {
+                    redraw(NO_POSITION);
+                    return;
                 }
-            else if (EntityMessage.SWIPE_ACTION_HIDE.equals(action))
-                onActionHide(message);
-            else if (EntityMessage.SWIPE_ACTION_MOVE.equals(action)) {
-                adapter.notifyItemChanged(pos);
-                onSwipeMove(message);
-            } else if (EntityMessage.SWIPE_ACTION_JUNK.equals(action)) {
-                adapter.notifyItemChanged(pos);
-                onSwipeJunk(message);
-            } else if (EntityMessage.SWIPE_ACTION_DELETE.equals(action) ||
-                    (action.equals(message.folder) && EntityFolder.TRASH.equals(message.folderType)) ||
-                    (EntityFolder.TRASH.equals(actionType) && EntityFolder.JUNK.equals(message.folderType)))
-                onSwipeDelete(message, pos);
-            else
-                swipeFolder(message, action);
+
+                TupleMessageEx message = getMessage(pos);
+                if (message == null) {
+                    redraw(NO_POSITION);
+                    return;
+                }
+
+                boolean expanded = iProperties.getValue("expanded", message.id);
+
+                if (expanded && swipe_reply) {
+                    redraw(pos);
+                    onMenuReply(message, "reply", null);
+                    return;
+                }
+
+                if (EntityFolder.OUTBOX.equals(message.folderType)) {
+                    ActivityCompose.undoSend(message.id, getContext(), getViewLifecycleOwner(), getParentFragmentManager());
+                    return;
+                }
+
+                TupleAccountSwipes swipes = accountSwipes.get(message.account);
+                if (swipes == null) {
+                    redraw(NO_POSITION);
+                    return;
+                }
+
+                if (message.accountProtocol != EntityAccount.TYPE_IMAP) {
+                    if (swipes.swipe_right == null)
+                        swipes.swipe_right = EntityMessage.SWIPE_ACTION_SEEN;
+                    if (swipes.swipe_left == null)
+                        swipes.swipe_left = EntityMessage.SWIPE_ACTION_DELETE;
+                }
+
+                Long action = (direction == ItemTouchHelper.LEFT ? swipes.swipe_left : swipes.swipe_right);
+                String actionType = (direction == ItemTouchHelper.LEFT ? swipes.left_type : swipes.right_type);
+                if (action == null) {
+                    redraw(NO_POSITION);
+                    return;
+                }
+
+                if (message.uid == null &&
+                        message.accountProtocol == EntityAccount.TYPE_IMAP &&
+                        EntityFolder.DRAFTS.equals(message.folderType) &&
+                        EntityFolder.TRASH.equals(actionType)) {
+                    action = EntityMessage.SWIPE_ACTION_DELETE;
+                    actionType = null;
+                }
+
+                Log.i("Swiped dir=" + direction +
+                        " action=" + action +
+                        " type=" + actionType +
+                        " message=" + message.id +
+                        " folder=" + message.folderType);
+
+                if (EntityMessage.SWIPE_ACTION_ASK.equals(action)) {
+                    redraw(pos);
+                    onSwipeAsk(message, viewHolder);
+                } else if (EntityMessage.SWIPE_ACTION_SEEN.equals(action))
+                    onActionSeenSelection(message.unseen > 0, message.id, false);
+                else if (EntityMessage.SWIPE_ACTION_FLAG.equals(action))
+                    onActionFlagSelection(!message.ui_flagged, Color.TRANSPARENT, message.id, false);
+                else if (EntityMessage.SWIPE_ACTION_SNOOZE.equals(action))
+                    if (ActivityBilling.isPro(getContext()))
+                        onActionSnooze(message);
+                    else {
+                        redraw(pos);
+                        startActivity(new Intent(getContext(), ActivityBilling.class));
+                    }
+                else if (EntityMessage.SWIPE_ACTION_HIDE.equals(action))
+                    onActionHide(message);
+                else if (EntityMessage.SWIPE_ACTION_MOVE.equals(action)) {
+                    redraw(pos);
+                    onSwipeMove(message);
+                } else if (EntityMessage.SWIPE_ACTION_JUNK.equals(action)) {
+                    redraw(pos);
+                    onSwipeJunk(message);
+                } else if (EntityMessage.SWIPE_ACTION_DELETE.equals(action) ||
+                        (action.equals(message.folder) && EntityFolder.TRASH.equals(message.folderType)) ||
+                        (EntityFolder.TRASH.equals(actionType) && EntityFolder.JUNK.equals(message.folderType)))
+                    onSwipeDelete(message, pos);
+                else
+                    swipeFolder(message, action);
+            } catch (Throwable ex) {
+                Log.e(ex);
+                /*
+                    java.lang.IllegalStateException: Cannot call this method while RecyclerView is computing a layout or scrolling ...
+                            at androidx.recyclerview.widget.RecyclerView.assertNotInLayoutOrScroll(RecyclerView:3185)
+                            at androidx.recyclerview.widget.RecyclerView$RecyclerViewDataObserver.onItemRangeChanged(RecyclerView:5712)
+                            at androidx.recyclerview.widget.RecyclerView$AdapterDataObservable.notifyItemRangeChanged(RecyclerView:12674)
+                            at androidx.recyclerview.widget.RecyclerView$AdapterDataObservable.notifyItemRangeChanged(RecyclerView:12664)
+                            at androidx.recyclerview.widget.RecyclerView$Adapter.notifyItemChanged(RecyclerView:7599)
+                            at eu.faircode.email.FragmentMessages$60.onSwiped(FragmentMessages:2818)
+                 */
+            }
         }
 
         private TupleMessageEx getMessage(int pos) {
@@ -2865,6 +2968,24 @@ public class FragmentMessages extends FragmentBase
                 return null;
 
             return message;
+        }
+
+        private void redraw(int pos) {
+            rvMessage.post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+                            return;
+                        if (pos == NO_POSITION)
+                            adapter.notifyDataSetChanged();
+                        else
+                            adapter.notifyItemChanged(pos);
+                    } catch (Throwable ex) {
+                        Log.e(ex);
+                    }
+                }
+            });
         }
 
         private void onSwipeAsk(final @NonNull TupleMessageEx message, @NonNull RecyclerView.ViewHolder viewHolder) {
@@ -2978,6 +3099,7 @@ public class FragmentMessages extends FragmentBase
 
         private void onSwipeMove(final @NonNull TupleMessageEx message) {
             Bundle args = new Bundle();
+            args.putInt("icon", R.drawable.twotone_drive_file_move_24);
             args.putString("title", getString(R.string.title_move_to_folder));
             args.putLong("account", message.account);
             args.putLongArray("disabled", new long[]{message.folder});
@@ -3045,7 +3167,7 @@ public class FragmentMessages extends FragmentBase
             }
 
             if (pos != NO_POSITION)
-                adapter.notifyItemChanged(pos);
+                redraw(pos);
 
             FragmentDialogAsk ask = new FragmentDialogAsk();
             ask.setArguments(args);
@@ -4136,6 +4258,7 @@ public class FragmentMessages extends FragmentBase
 
     private void onActionMoveSelectionAccount(long account, boolean copy, List<Long> disabled) {
         Bundle args = new Bundle();
+        args.putInt("icon", copy ? R.drawable.twotone_file_copy_24 : R.drawable.twotone_drive_file_move_24);
         args.putString("title", getString(copy ? R.string.title_copy_to : R.string.title_move_to_folder));
         args.putLong("account", account);
         args.putBoolean("copy", copy);
@@ -5371,7 +5494,7 @@ public class FragmentMessages extends FragmentBase
             onMenuConfirmLinks();
             return true;
         } else if (itemId == R.id.menu_select_all || itemId == R.id.menu_select_found) {
-            onMenuSelectAll();
+            onMenuSelect(0, Long.MAX_VALUE, false);
             return true;
         } else if (itemId == R.id.menu_mark_all_read) {
             onMenuMarkAllRead();
@@ -5703,9 +5826,9 @@ public class FragmentMessages extends FragmentBase
         positions.clear();
     }
 
-    private void onMenuSelectAll() {
+    private void onMenuSelect(long from, long to, boolean extend) {
         ViewModelMessages model = new ViewModelProvider(getActivity()).get(ViewModelMessages.class);
-        model.getIds(getContext(), getViewLifecycleOwner(), new Observer<List<Long>>() {
+        model.getIds(getContext(), getViewLifecycleOwner(), from, to, new Observer<List<Long>>() {
             @Override
             public void onChanged(List<Long> ids) {
                 view.post(new Runnable() {
@@ -5714,9 +5837,16 @@ public class FragmentMessages extends FragmentBase
                         try {
                             if (selectionTracker == null)
                                 return;
-                            selectionTracker.clearSelection();
+                            if (!extend)
+                                selectionTracker.clearSelection();
                             for (long id : ids)
-                                selectionTracker.select(id);
+                                if (extend) {
+                                    if (selectionTracker.isSelected(id))
+                                        selectionTracker.deselect(id);
+                                    else
+                                        selectionTracker.select(id);
+                                } else
+                                    selectionTracker.select(id);
                         } catch (Throwable ex) {
                             Log.e(ex);
                         }
@@ -7983,9 +8113,7 @@ public class FragmentMessages extends FragmentBase
                 OutputStream out = null;
                 boolean inline = false;
 
-                File tmp = new File(context.getFilesDir(), "encryption");
-                if (!tmp.exists())
-                    tmp.mkdir();
+                File tmp = Helper.ensureExists(new File(context.getFilesDir(), "encryption"));
                 File plain = new File(tmp, message.id + ".pgp_out");
 
                 // Find encrypted data
@@ -8146,8 +8274,17 @@ public class FragmentMessages extends FragmentBase
                                     String protect_subject = parts.getProtectedSubject();
 
                                     // Write decrypted body
+                                    boolean debug = prefs.getBoolean("debug", false);
                                     boolean download_plain = prefs.getBoolean("download_plain", false);
                                     String html = parts.getHtml(context, download_plain);
+
+                                    if (html == null && debug) {
+                                        int textColorLink = Helper.resolveColor(context, android.R.attr.textColorLink);
+                                        SpannableStringBuilder ssb = new SpannableStringBuilderEx();
+                                        MessageHelper.getStructure(imessage, ssb, 0, textColorLink);
+                                        html = HtmlHelper.toHtml(ssb, context);
+                                    }
+
                                     Helper.writeText(message.getFile(context), html);
                                     Log.i("pgp html=" + (html == null ? null : html.length()));
 
@@ -8579,7 +8716,7 @@ public class FragmentMessages extends FragmentBase
                     if (chain == null || chain.length == 0)
                         throw new IllegalArgumentException("Public key missing");
 
-                    // Get encrypted message
+                    // Get last encrypted message
                     File input = null;
                     List<EntityAttachment> attachments = db.attachment().getAttachments(message.id);
                     for (EntityAttachment attachment : attachments)
@@ -8587,7 +8724,6 @@ public class FragmentMessages extends FragmentBase
                             if (!attachment.available)
                                 throw new IllegalArgumentException(context.getString(R.string.title_attachments_missing));
                             input = attachment.getFile(context);
-                            break;
                         }
 
                     if (input == null)
@@ -8838,11 +8974,21 @@ public class FragmentMessages extends FragmentBase
                 MimeMessage imessage = new MimeMessage(isession, is);
                 MessageHelper helper = new MessageHelper(imessage, context);
                 MessageHelper.MessageParts parts = helper.getMessageParts();
+                String protect_subject = parts.getProtectedSubject();
 
                 // Write decrypted body
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+                boolean debug = prefs.getBoolean("debug", false);
                 boolean download_plain = prefs.getBoolean("download_plain", false);
                 String html = parts.getHtml(context, download_plain);
+
+                if (html == null && debug) {
+                    int textColorLink = Helper.resolveColor(context, android.R.attr.textColorLink);
+                    SpannableStringBuilder ssb = new SpannableStringBuilderEx();
+                    MessageHelper.getStructure(imessage, ssb, 0, textColorLink);
+                    html = HtmlHelper.toHtml(ssb, context);
+                }
+
                 Helper.writeText(message.getFile(context), html);
                 Log.i("s/mime html=" + (html == null ? null : html.length()));
 
@@ -8853,6 +8999,9 @@ public class FragmentMessages extends FragmentBase
                 DB db = DB.getInstance(context);
                 try {
                     db.beginTransaction();
+
+                    if (protect_subject != null)
+                        db.message().setMessageSubject(message.id, protect_subject);
 
                     db.message().setMessageContent(message.id,
                             true,
@@ -8868,23 +9017,38 @@ public class FragmentMessages extends FragmentBase
                     });
 
                     // Add decrypted attachments
+                    boolean signedData = false;
                     List<EntityAttachment> remotes = parts.getAttachments();
                     for (int index = 0; index < remotes.size(); index++) {
                         EntityAttachment remote = remotes.get(index);
                         remote.message = message.id;
                         remote.sequence = index + 1;
                         remote.id = db.attachment().insertAttachment(remote);
+                        Log.i("s/mime attachment=" + remote);
+
                         try {
                             parts.downloadAttachment(context, index, remote);
                         } catch (Throwable ex) {
                             Log.e(ex);
                         }
-                        Log.i("s/mime attachment=" + remote);
+
+                        if (!parts.hasBody() && remotes.size() == 1 &&
+                                ("application/pkcs7-mime".equals(remote.type) ||
+                                        "application/x-pkcs7-mime".equals(remote.type)))
+                            try (FileInputStream fos = new FileInputStream(remote.getFile(context))) {
+                                new CMSSignedData(fos).getSignedContent().getContent();
+                                signedData = true;
+                                remote.encryption = EntityAttachment.SMIME_SIGNED_DATA;
+                                db.attachment().setEncryption(remote.id, remote.encryption);
+                            } catch (Throwable ex) {
+                                Log.w(ex);
+                            }
                     }
 
                     checkPep(message, remotes, context);
 
-                    db.message().setMessageEncrypt(message.id, parts.getEncryption());
+                    db.message().setMessageEncrypt(message.id,
+                            signedData ? EntityMessage.SMIME_SIGNONLY : parts.getEncryption());
                     db.message().setMessageStored(message.id, new Date().getTime());
                     db.message().setMessageFts(message.id, false);
 
@@ -9855,11 +10019,32 @@ public class FragmentMessages extends FragmentBase
     static void search(
             final Context context, final LifecycleOwner owner, final FragmentManager manager,
             long account, long folder, boolean server, BoundaryCallbackMessages.SearchCriteria criteria) {
+        if (criteria.onServer()) {
+            if (account > 0 && folder > 0)
+                server = true;
+            else {
+                ToastEx.makeText(context, R.string.title_complex_search, Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+
         if (owner.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
             manager.popBackStack("search", FragmentManager.POP_BACK_STACK_INCLUSIVE);
 
         if (manager.isDestroyed())
             return;
+
+        DB db = DB.getInstance(context);
+        db.getQueryExecutor().execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    db.message().resetSearch();
+                } catch (Throwable ex) {
+                    Log.e(ex);
+                }
+            }
+        });
 
         Bundle args = new Bundle();
         args.putLong("account", account);

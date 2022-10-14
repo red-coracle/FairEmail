@@ -39,6 +39,9 @@ import android.content.pm.PermissionGroupInfo;
 import android.content.pm.PermissionInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.database.Cursor;
+import android.database.CursorWindowAllocationException;
+import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteFullException;
 import android.graphics.Point;
 import android.graphics.Typeface;
@@ -53,6 +56,7 @@ import android.os.Bundle;
 import android.os.DeadObjectException;
 import android.os.DeadSystemException;
 import android.os.Debug;
+import android.os.Environment;
 import android.os.IBinder;
 import android.os.LocaleList;
 import android.os.OperationCanceledException;
@@ -163,8 +167,6 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 
-import io.requery.android.database.CursorWindowAllocationException;
-
 public class Log {
     private static Context ctx;
 
@@ -172,6 +174,37 @@ public class Log {
     private static final long MAX_LOG_SIZE = 8 * 1024 * 1024L;
     private static final int MAX_CRASH_REPORTS = (BuildConfig.TEST_RELEASE ? 50 : 5);
     private static final String TAG = "fairemail";
+
+    // https://docs.oracle.com/javase/8/docs/technotes/guides/net/proxies.html
+    // https://docs.oracle.com/javase/8/docs/api/java/net/doc-files/net-properties.html
+    private static final List<String> NETWORK_PROPS = Collections.unmodifiableList(Arrays.asList(
+            "java.net.preferIPv4Stack",
+            "java.net.preferIPv6Addresses",
+            "http.proxyHost",
+            "http.proxyPort",
+            "http.nonProxyHosts",
+            "https.proxyHost",
+            "https.proxyPort",
+            //"ftp.proxyHost",
+            //"ftp.proxyPort",
+            //"ftp.nonProxyHosts",
+            "socksProxyHost",
+            "socksProxyPort",
+            "socksProxyVersion",
+            "java.net.socks.username",
+            //"java.net.socks.password",
+            "http.agent",
+            "http.keepalive",
+            "http.maxConnections",
+            "http.maxRedirects",
+            "http.auth.digest.validateServer",
+            "http.auth.digest.validateProxy",
+            "http.auth.digest.cnonceRepeat",
+            "http.auth.ntlm.domain",
+            "jdk.https.negotiate.cbt",
+            "networkaddress.cache.ttl",
+            "networkaddress.cache.negative.ttl"
+    ));
 
     static final String TOKEN_REFRESH_REQUIRED =
             "Token refresh required. Is there a VPN based app running?";
@@ -1515,6 +1548,27 @@ public class Log {
              */
             return false;
 
+        if (ex instanceof NullPointerException &&
+                ex.getMessage() != null &&
+                ex.getMessage().contains("com.android.server.job.controllers.JobStatus"))
+            /*
+                java.lang.RuntimeException: java.lang.NullPointerException: Attempt to invoke virtual method 'int com.android.server.job.controllers.JobStatus.getUid()' on a null object reference
+                    at android.app.job.JobService$JobHandler.handleMessage(JobService.java:139)
+                    at android.os.Handler.dispatchMessage(Handler.java:102)
+                    at android.os.Looper.loop(Looper.java:148)
+                    at android.app.ActivityThread.main(ActivityThread.java:5525)
+                    at java.lang.reflect.Method.invoke(Native Method)
+                    at com.android.internal.os.ZygoteInit$MethodAndArgsCaller.run(ZygoteInit.java:730)
+                    at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:620)
+                Caused by: java.lang.NullPointerException: Attempt to invoke virtual method 'int com.android.server.job.controllers.JobStatus.getUid()' on a null object reference
+                    at android.os.Parcel.readException(Parcel.java:1605)
+                    at android.os.Parcel.readException(Parcel.java:1552)
+                    at android.app.job.IJobCallback$Stub$Proxy.acknowledgeStopMessage(IJobCallback.java:144)
+                    at android.app.job.JobService$JobHandler.ackStopMessage(JobService.java:183)
+                    at android.app.job.JobService$JobHandler.handleMessage(JobService.java:136)
+             */
+            return false;
+
         if (isDead(ex))
             return false;
 
@@ -2229,7 +2283,7 @@ public class Log {
                 size += write(os, "enabled=" + enabled + (enabled ? "" : " !!!") +
                         " interval=" + pollInterval + "\r\n" +
                         "metered=" + metered + (metered ? "" : " !!!") +
-                        " restricted=" + ds + ("enabled".equals(ds) ? " !!!" : "") +
+                        " saving=" + ds + ("enabled".equals(ds) ? " !!!" : "") +
                         " vpn=" + vpn + (vpn ? " !!!" : "") +
                         " ng=" + ng + " tc=" + tc + "\r\n" +
                         "optimizing=" + (ignoring == null ? null : !ignoring) + (Boolean.FALSE.equals(ignoring) ? " !!!" : "") +
@@ -2771,18 +2825,30 @@ public class Log {
                 }
                 size += write(os, "\r\n");
 
+                for (String prop : NETWORK_PROPS)
+                    size += write(os, prop + "=" + System.getProperty(prop) + "\r\n");
+                size += write(os, "\r\n");
+
                 ApplicationInfo ai = context.getApplicationInfo();
                 if (ai != null)
                     size += write(os, String.format("Source: %s\r\n public: %s\r\n",
                             ai.sourceDir, ai.publicSourceDir));
-                size += write(os, String.format("Files: %s\r\n  external: %s\r\n",
-                        context.getFilesDir(), context.getExternalFilesDir(null)));
+                size += write(os, String.format("Files: %s\r\n  external: %s\r\n  storage: %s\r\n",
+                        context.getFilesDir(), context.getExternalFilesDir(null),
+                        Environment.getExternalStorageDirectory()));
                 size += write(os, String.format("Cache: %s\r\n  external: %s\n",
                         context.getCacheDir(), context.getExternalCacheDir()));
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
                     size += write(os, String.format("Data: %s\r\n", context.getDataDir().getAbsolutePath()));
                 size += write(os, String.format("Database: %s\r\n",
                         context.getDatabasePath(DB.DB_NAME)));
+
+                try (Cursor cursor = SQLiteDatabase.create(null).rawQuery(
+                        "SELECT sqlite_version() AS sqlite_version", null)) {
+                    if (cursor.moveToNext())
+                        size += write(os, String.format("sqlite: %s\r\n", cursor.getString(0)));
+                }
+
                 size += write(os, "\r\n");
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

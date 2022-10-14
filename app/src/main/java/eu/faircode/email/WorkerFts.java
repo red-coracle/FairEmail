@@ -24,6 +24,8 @@ import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
@@ -37,8 +39,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-
-import io.requery.android.database.sqlite.SQLiteDatabase;
 
 public class WorkerFts extends Worker {
     private static final int INDEX_DELAY = 30; // seconds
@@ -65,7 +65,7 @@ public class WorkerFts extends Worker {
             List<Long> ids = new ArrayList<>(INDEX_BATCH_SIZE);
             DB db = DB.getInstance(context);
 
-            SQLiteDatabase sdb = FtsDbHelper.getInstance(context);
+            SQLiteDatabase sdb = Fts4DbHelper.getInstance(context);
 
             try (Cursor cursor = db.message().getMessageFts()) {
                 while (cursor != null && cursor.moveToNext())
@@ -86,14 +86,13 @@ public class WorkerFts extends Worker {
                         if (text == null)
                             text = "";
 
-                        boolean fts = prefs.getBoolean("fts", false);
-                        if (!fts)
-                            break;
-
                         try {
                             sdb.beginTransaction();
-                            FtsDbHelper.insert(sdb, message, text);
+                            Fts4DbHelper.insert(sdb, message, text);
                             sdb.setTransactionSuccessful();
+                        } catch (SQLiteException ex) {
+                            Log.w(ex);
+                            break;
                         } finally {
                             sdb.endTransaction();
                         }
@@ -102,6 +101,10 @@ public class WorkerFts extends Worker {
 
                         if (ids.size() >= INDEX_BATCH_SIZE)
                             markIndexed(db, ids);
+
+                        boolean fts = prefs.getBoolean("fts", false);
+                        if (!fts)
+                            break;
                     } catch (Throwable ex) {
                         Log.e(ex);
                     }

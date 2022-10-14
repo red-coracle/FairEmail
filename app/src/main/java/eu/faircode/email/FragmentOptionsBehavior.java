@@ -558,7 +558,7 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
         etDefaultSnooze.setText(default_snooze == 1 ? null : Integer.toString(default_snooze));
         etDefaultSnooze.setHint("1");
 
-        swPhotoPicker.setChecked(prefs.getBoolean("photo_picker", true));
+        swPhotoPicker.setChecked(prefs.getBoolean("photo_picker", false));
 
         swPull.setChecked(prefs.getBoolean("pull", true));
         swAutoScroll.setChecked(prefs.getBoolean("autoscroll", false));
@@ -671,7 +671,10 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
 
                             if ((left != null && EntityMessage.SWIPE_ACTION_HIDE.equals(left.id)) ||
                                     (right != null && EntityMessage.SWIPE_ACTION_HIDE.equals(right.id)))
-                                prefs.edit().putBoolean("button_hide", true).apply();
+                                prefs.edit()
+                                        .putBoolean("message_tools", true)
+                                        .putBoolean("button_hide", true)
+                                        .apply();
 
                             Bundle args = new Bundle();
                             args.putLong("left", left == null ? 0 : left.id);

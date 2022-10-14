@@ -193,9 +193,14 @@ import biweekly.ICalendar;
 import biweekly.component.VEvent;
 import biweekly.parameter.ParticipationStatus;
 import biweekly.property.Attendee;
+import biweekly.property.CalendarScale;
+import biweekly.property.Created;
+import biweekly.property.LastModified;
 import biweekly.property.Method;
 import biweekly.property.Organizer;
 import biweekly.property.RawProperty;
+import biweekly.property.Summary;
+import biweekly.property.Transparency;
 import biweekly.util.ICalDate;
 
 public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHolder> {
@@ -250,6 +255,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
     private float textSize;
 
     private boolean date;
+    private boolean week;
     private boolean cards;
     private boolean shadow_unread;
     private boolean shadow_highlight;
@@ -301,7 +307,6 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
 
     private boolean language_detection;
     private List<String> languages;
-    private boolean experiments;
     private static boolean debug;
     private int level;
     private boolean canDarken;
@@ -390,7 +395,6 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
 
         private TextView tvSubmitterTitle;
         private TextView tvDeliveredToTitle;
-        private TextView tvReturnPathTitle;
         private TextView tvFromExTitle;
         private TextView tvToTitle;
         private TextView tvReplyToTitle;
@@ -406,7 +410,6 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
 
         private TextView tvSubmitter;
         private TextView tvDeliveredTo;
-        private TextView tvReturnPath;
         private TextView tvFromEx;
         private TextView tvTo;
         private TextView tvReplyTo;
@@ -791,7 +794,6 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
 
             tvSubmitterTitle = vsBody.findViewById(R.id.tvSubmitterTitle);
             tvDeliveredToTitle = vsBody.findViewById(R.id.tvDeliveredToTitle);
-            tvReturnPathTitle = vsBody.findViewById(R.id.tvReturnPathTitle);
             tvFromExTitle = vsBody.findViewById(R.id.tvFromExTitle);
             tvToTitle = vsBody.findViewById(R.id.tvToTitle);
             tvReplyToTitle = vsBody.findViewById(R.id.tvReplyToTitle);
@@ -807,7 +809,6 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
 
             tvSubmitter = vsBody.findViewById(R.id.tvSubmitter);
             tvDeliveredTo = vsBody.findViewById(R.id.tvDeliveredTo);
-            tvReturnPath = vsBody.findViewById(R.id.tvReturnPath);
             tvFromEx = vsBody.findViewById(R.id.tvFromEx);
             tvTo = vsBody.findViewById(R.id.tvTo);
             tvReplyTo = vsBody.findViewById(R.id.tvReplyTo);
@@ -1394,7 +1395,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     message.totalSize != null && ("size".equals(sort) || "attachments".equals(sort))
                             ? View.VISIBLE : View.GONE);
             SpannableStringBuilder time = new SpannableStringBuilderEx(
-                    date && FragmentMessages.SORT_DATE_HEADER.contains(sort)
+                    (date && !week) && FragmentMessages.SORT_DATE_HEADER.contains(sort)
                             ? TF.format(message.received)
                             : Helper.getRelativeTimeSpanString(context, message.received));
             if (show_recent && message.recent)
@@ -1660,7 +1661,6 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
 
             tvSubmitterTitle.setVisibility(View.GONE);
             tvDeliveredToTitle.setVisibility(View.GONE);
-            tvReturnPathTitle.setVisibility(View.GONE);
             tvFromExTitle.setVisibility(View.GONE);
             tvToTitle.setVisibility(View.GONE);
             tvReplyToTitle.setVisibility(View.GONE);
@@ -1676,7 +1676,6 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
 
             tvSubmitter.setVisibility(View.GONE);
             tvDeliveredTo.setVisibility(View.GONE);
-            tvReturnPath.setVisibility(View.GONE);
             tvFromEx.setVisibility(View.GONE);
             tvTo.setVisibility(View.GONE);
             tvReplyTo.setVisibility(View.GONE);
@@ -2463,10 +2462,6 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             tvDeliveredTo.setVisibility(show_addresses && !TextUtils.isEmpty(message.deliveredto) ? View.VISIBLE : View.GONE);
             tvDeliveredTo.setText(formatAddresses(new Address[]{deliveredto}, true));
 
-            tvReturnPathTitle.setVisibility(show_addresses && experiments && message.return_path != null && message.return_path.length > 0 ? View.VISIBLE : View.GONE);
-            tvReturnPath.setVisibility(show_addresses && experiments && message.return_path != null && message.return_path.length > 0 ? View.VISIBLE : View.GONE);
-            tvReturnPath.setText(formatAddresses(message.return_path, true));
-
             tvFromExTitle.setVisibility((froms > 1 || show_addresses) && !TextUtils.isEmpty(from) ? View.VISIBLE : View.GONE);
             tvFromEx.setVisibility((froms > 1 || show_addresses) && !TextUtils.isEmpty(from) ? View.VISIBLE : View.GONE);
             tvFromEx.setText(from);
@@ -2863,8 +2858,20 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                         }
 
                     File file = message.getFile(context);
-                    if (!file.exists())
+                    if (!file.exists()) {
+                        try {
+                            db.beginTransaction();
+
+                            db.message().resetMessageContent(message.id);
+                            EntityOperation.queue(context, message, EntityOperation.BODY);
+
+                            db.setTransactionSuccessful();
+                        } finally {
+                            db.endTransaction();
+                        }
+
                         return null;
+                    }
 
                     if (file.length() > 0)
                         signed_data = false;
@@ -3037,13 +3044,13 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
 
                         return document.html();
                     } else {
+                        if (message.ui_found && found && !TextUtils.isEmpty(searched))
+                            HtmlHelper.highlightSearched(context, document, searched);
+
                         // Cleanup message
                         document = HtmlHelper.sanitizeView(context, document, show_images);
 
                         HtmlHelper.autoLink(document);
-
-                        if (message.ui_found && found && !TextUtils.isEmpty(searched))
-                            HtmlHelper.highlightSearched(context, document, searched);
 
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                             args.putParcelable("actions", getConversationActions(message, document, context));
@@ -3148,7 +3155,6 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                                             bindConversationActions(message, args.getParcelable("actions"));
                                         bindExtras(message);
-
                                         cowner.start(); // Show attachments
                                     } catch (Throwable ex) {
                                         Log.e(ex);
@@ -3171,7 +3177,6 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                                             bindConversationActions(message, args.getParcelable("actions"));
                                         bindExtras(message);
-
                                         cowner.start(); // Show attachments
                                     } catch (Throwable ex) {
                                         Log.e(ex);
@@ -3179,8 +3184,10 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                                 }
                             });
                         }
-                    } else
+                    } else {
                         bindExtras(message);
+                        cowner.start(); // Show attachments
+                    }
 
                     if (scroll)
                         properties.scrollTo(getAdapterPosition(), 0);
@@ -3644,8 +3651,19 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                                 return intent;
                             }
 
+                            Created created = event.getCreated();
+                            LastModified modified = event.getLastModified();
+                            Transparency transparancy = event.getTransparency();
+
                             // https://tools.ietf.org/html/rfc5546#section-4.2.2
                             VEvent ev = new VEvent();
+
+                            if (created != null && false)
+                                ev.setCreated(created);
+                            if (modified != null && false)
+                                ev.setLastModified(modified);
+                            if (transparancy != null && false)
+                                ev.setTransparency(transparancy);
 
                             ev.setOrganizer(event.getOrganizer());
 
@@ -3710,25 +3728,48 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                                 name = name.replaceAll("\\s+", " ");
 
                             Attendee attendee = new Attendee(name, email);
+                            //attendee.setCalendarUserType(CalendarUserType.INDIVIDUAL);
+                            //attendee.setRole(Role.ATTENDEE);
+                            //attendee.setRsvp(true);
 
+                            String status = null;
                             if (action == R.id.btnCalendarAccept) {
+                                //ev.setStatus(Status.accepted());
                                 attendee.setParticipationStatus(ParticipationStatus.ACCEPTED);
+                                status = context.getString(R.string.title_icalendar_accept);
                             } else if (action == R.id.btnCalendarDecline) {
+                                //ev.setStatus(Status.declined());
                                 attendee.setParticipationStatus(ParticipationStatus.DECLINED);
+                                status = context.getString(R.string.title_icalendar_decline);
                             } else if (action == R.id.btnCalendarMaybe) {
+                                //ev.setStatus(Status.tentative());
                                 attendee.setParticipationStatus(ParticipationStatus.TENTATIVE);
+                                status = context.getString(R.string.title_icalendar_maybe);
                             }
 
                             ev.addAttendee(attendee);
 
+                            if (status != null) {
+                                args.putString("status", status);
+                                Summary summary = ev.getSummary();
+                                ev.setSummary(status + ": " + (summary == null ? "" : summary.getValue()));
+                            }
+
+                            // Microsoft specific properties:
+                            // X-MICROSOFT-CDO-BUSYSTATUS:TENTATIVE
+                            // X-MICROSOFT-CDO-IMPORTANCE:1
+                            // X-MICROSOFT-CDO-INTENDEDSTATUS:BUSY
+                            // X-MICROSOFT-DISALLOW-COUNTER:FALSE
+                            // X-MS-OLK-AUTOSTARTCHECK:FALSE
+                            // X-MS-OLK-CONFTYPE:0
+
                             // https://icalendar.org/validator.html
                             ICalendar response = new ICalendar();
+                            response.setCalendarScale(CalendarScale.gregorian());
                             response.setMethod(Method.REPLY);
                             response.addEvent(ev);
 
-                            File dir = new File(context.getFilesDir(), "calendar");
-                            if (!dir.exists())
-                                dir.mkdir();
+                            File dir = Helper.ensureExists(new File(context.getFilesDir(), "calendar"));
                             File ics = new File(dir, message.id + ".ics");
                             response.write(ics);
 
@@ -3741,14 +3782,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                 @Override
                 protected void onExecuted(Bundle args, Object result) {
                     if (result instanceof File) {
-                        String status = null;
-                        if (action == R.id.btnCalendarAccept) {
-                            status = context.getString(R.string.title_icalendar_accept);
-                        } else if (action == R.id.btnCalendarDecline) {
-                            status = context.getString(R.string.title_icalendar_decline);
-                        } else if (action == R.id.btnCalendarMaybe) {
-                            status = context.getString(R.string.title_icalendar_maybe);
-                        }
+                        String status = args.getString("status");
 
                         if (args.getBoolean("share"))
                             Helper.share(context, (File) result, "text/calendar", status + ".ics");
@@ -5446,6 +5480,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                 return;
 
             Bundle args = new Bundle();
+            args.putInt("icon", copy ? R.drawable.twotone_file_copy_24 : R.drawable.twotone_drive_file_move_24);
             args.putString("title", context.getString(copy ? R.string.title_copy_to : R.string.title_move_to_folder));
             args.putLong("account", account);
             args.putLongArray("disabled", disabled);
@@ -6731,10 +6766,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                             element.attr("x-computed", computed);
                     }
 
-                    File dir = new File(context.getFilesDir(), "shared");
-                    if (!dir.exists())
-                        dir.mkdir();
-
+                    File dir = Helper.ensureExists(new File(context.getFilesDir(), "shared"));
                     File share = new File(dir, message.id + ".txt");
                     Helper.writeText(share, d.html());
 
@@ -7215,6 +7247,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         boolean generated = prefs.getBoolean("generated_icons", true);
 
         this.date = prefs.getBoolean("date", true);
+        this.week = prefs.getBoolean("date_week", false);
         this.cards = prefs.getBoolean("cards", true);
         this.shadow_unread = prefs.getBoolean("shadow_unread", false);
         this.shadow_highlight = prefs.getBoolean("shadow_highlight", false);
@@ -7278,8 +7311,6 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                 languages.add(ll.get(i).getLanguage());
         } else
             languages = null;
-
-        this.experiments = prefs.getBoolean("experiments", false);
 
         debug = prefs.getBoolean("debug", false);
         level = prefs.getInt("log_level", Log.getDefaultLogLevel());
@@ -7974,8 +8005,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         if (filter_duplicates && message.duplicate)
             return R.layout.item_message_duplicate;
 
-        if (filter_trash && differ.getItemCount() > 1 &&
-                EntityFolder.TRASH.equals(message.folderType))
+        if (filter_trash && EntityFolder.TRASH.equals(message.folderType) && !allTrashed())
             return R.layout.item_message_duplicate;
 
         return (compact ? R.layout.item_message_compact : R.layout.item_message_normal);
@@ -8025,8 +8055,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         }
 
         if ((filter_duplicates && message.duplicate) ||
-                (filter_trash && differ.getItemCount() > 1 &&
-                        EntityFolder.TRASH.equals(message.folderType))) {
+                (filter_trash && EntityFolder.TRASH.equals(message.folderType) && !allTrashed())) {
             holder.card.setCardBackgroundColor(message.folderColor == null
                     ? Color.TRANSPARENT
                     : ColorUtils.setAlphaComponent(message.folderColor, 128));
@@ -8051,6 +8080,19 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         holder.unwire();
         holder.bindTo(message, scroll);
         holder.wire();
+    }
+
+    private boolean allTrashed() {
+        if (differ.getItemCount() == 1)
+            return true;
+
+        for (int i = 0; i < differ.getItemCount(); i++) {
+            TupleMessageEx m = differ.getItem(i);
+            if (m == null || !EntityFolder.TRASH.equals(m.folderType))
+                return false;
+        }
+
+        return true;
     }
 
     public void onItemSelected(@NonNull ViewHolder holder, boolean selected) {
@@ -8283,6 +8325,11 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     }
 
                     return null;
+                }
+
+                @Override
+                protected void onExecuted(Bundle args, Void data) {
+                    WorkerFts.init(context, false);
                 }
 
                 @Override

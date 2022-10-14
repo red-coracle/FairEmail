@@ -3,22 +3,22 @@
 
 &#x1F30E; [Google Translate](https://translate.google.com/translate?sl=en&u=https%3A%2F%2Fgithub.com%2FM66B%2FFairEmail%2Fblob%2Fmaster%2FFAQ.md)
 
-If you have a question, please check the following frequently asked questions first.
-[At the bottom](#user-content-get-support),
+&#x1F1EC;&#x1F1E7; If you have a question, please check the following frequently asked questions first.
+[At the bottom](#user-content-quick-support),
 you can find out how to ask other questions, request features, and report bugs.
 You will receive an answer in your own language.
 
-Wenn Sie eine Frage haben, überprüfen Sie bitte zuerst die folgenden häufig gestellten Fragen.
-[Unten](#user-content-get-support) erfahren Sie, wie Sie andere Fragen stellen, Funktionen anfordern und Fehler melden können.
+&#x1F1E9;&#x1F1EA; Wenn Sie eine Frage haben, überprüfen Sie bitte zuerst die folgenden häufig gestellten Fragen.
+[Unten](#user-content-quick-support) erfahren Sie, wie Sie andere Fragen stellen, Funktionen anfordern und Fehler melden können.
 Sie erhalten eine Antwort in Ihrer eigenen Sprache.
 
-Si vous avez une question, veuillez d'abord vérifier les questions fréquemment posées suivantes.
-[En bas](#user-content-get-support), vous pouvez découvrir comment poser d'autres questions, demander des fonctionnalités et signaler des bogues.
+&#x1F1EB;&#x1F1F7; Si vous avez une question, veuillez d'abord vérifier les questions fréquemment posées suivantes.
+[En bas](#user-content-quick-support), vous pouvez découvrir comment poser d'autres questions, demander des fonctionnalités et signaler des bogues.
 Vous recevrez une réponse dans votre propre langue.
 
 ## Tutorials
 
-Please [see here](https://github.com/M66B/FairEmail/tree/master/tutorials) for tutorials.
+Please [see here](https://github.com/M66B/FairEmail/tree/master/tutorials) for tutorials &#x1F4D6;.
 
 ## Index
 
@@ -57,8 +57,8 @@ For authorizing:
 * Posteo: please check if [additional email account protection](https://posteo.de/en/help/activating-additional-email-account-protection) ([German](https://posteo.de/hilfe/zusaetzlichen-postfachschutz-deaktivieren)) isn't enabled
 * Web.de: please check if [IMAP is enabled](https://hilfe.web.de/pop-imap/imap/imap-serverdaten.html)
 * Web.de: with two factor authentication you'll need to use [an app password](https://web.de/email/sicherheit/zwei-faktor-authentifizierung/)
-* GMX: please check if [IMAP is enabled](https://support.gmx.com/pop-imap/toggle.html) ([German](https://hilfe.gmx.net/pop-imap/einschalten.html))
-* GMX: with two factor authentication you'll need to use [an app password](https://support.gmx.com/security/2fa/application-specific-passwords.html) ([German](https://hilfe.gmx.net/sicherheit/2fa/anwendungsspezifisches-passwort.html))
+* GMX: please check if [IMAP is enabled](https://support.gmx.com/pop-imap/toggle.html) ([German](https://hilfe.gmx.net/pop-imap/einschalten.html)). Reportedly, you need to do this on a desktop computer.
+* GMX: with two factor authentication you'll need to use [an app password](https://support.gmx.com/security/2fa/application-specific-passwords.html) ([German](https://hilfe.gmx.net/sicherheit/2fa/anwendungsspezifisches-passwort.html)). Not that enabling two-factor authentication does not automatically enable IMAP.
 * T-online.de: please make sure you use [an email password](https://www.telekom.de/hilfe/festnetz-internet-tv/e-mail/e-mail-adresse-passwoerter-und-sicherheit/passwort-fuer-e-mail-programme-einrichten) (German) and not your account password
 * Ionos (1und1): please make sure you use [an email password](https://www.ionos.de/hilfe/e-mail/problemloesungen-mail-basicmail-business/passwort-fuer-e-mail-konto-bei-11-ionos-aendern/) (German) and not your account password
 * Yandex: please check if [IMAP is enabled](https://yandex.com/support/mail/mail-clients/others.html)
@@ -120,18 +120,20 @@ Related questions:
 * Language detection [is not working anymore](https://issuetracker.google.com/issues/173337263) on Pixel devices with (upgraded to?) Android 11
 * A [bug in OpenKeychain](https://github.com/open-keychain/open-keychain/issues/2688) causes invalid PGP signatures when using a hardware token.
 * A [bug in Crowdin](https://crowdin.com/messages/536694) blocks updating FAQ.md (this text) for translation.
-* Search suggestions causes the keyboard losing focus on Android 12L
+* Search suggestions causes the keyboard losing focus on Android 12L.
+* [A bug](https://techcommunity.microsoft.com/t5/outlook/outlook-office-365-imap-idle-is-broken/m-p/3616242) in the Outlook IMAP server causes delayed new message notifications.
 
 <a name="redmi"></a>
 <a name="oneplus"></a>
+<a name="oppo"></a>
 
 <br />
 
-**Xiaomi Redmi / OnePlus**
+**Xiaomi Redmi / OnePlus / Oppo**
 
 &#x1F30E; [Google Translate](https://translate.google.com/translate?sl=en&u=https://github.com/M66B/FairEmail/blob/master/FAQ.md%23redmi)
 
-On some Xiaomi Redmi (Note) and some OnePlus devices the database occasionally gets corrupted, resulting in total data loss
+On some Xiaomi Redmi (Note) devices, some OnePlus devices with Android 12 and some Oppo devices with Android 12 the database occasionally gets corrupted, resulting in total data loss
 (on the device only, unless you are using a POP3 account with the option *Leave messages on server* disabled).
 
 The cause of this problem are disk I/O errors due to an Android bug (more likely) or maybe a hardware issue (less likely),
@@ -147,14 +149,16 @@ For the record the stack trace:
 
 ```
 android.database.sqlite.SQLiteDiskIOException: disk I/O error (code 778)
-        at io.requery.android.database.sqlite.SQLiteConnection.nativeExecute(SourceFile:-2)
-        at io.requery.android.database.sqlite.SQLiteConnection.execute(SQLiteConnection:595)
-        at io.requery.android.database.sqlite.SQLiteSession.endTransactionUnchecked(SQLiteSession:447)
-        at io.requery.android.database.sqlite.SQLiteSession.endTransaction(SQLiteSession:411)
-        at io.requery.android.database.sqlite.SQLiteDatabase.endTransaction(SQLiteDatabase:551)
-        at androidx.room.RoomDatabase.internalEndTransaction(RoomDatabase:594)
-        at androidx.room.RoomDatabase.endTransaction(RoomDatabase:584)
+	at io.requery.android.database.sqlite.SQLiteConnection.nativeExecute(SourceFile:-2)
+	at io.requery.android.database.sqlite.SQLiteConnection.execute(SQLiteConnection:595)
+	at io.requery.android.database.sqlite.SQLiteSession.endTransactionUnchecked(SQLiteSession:447)
+	at io.requery.android.database.sqlite.SQLiteSession.endTransaction(SQLiteSession:411)
+	at io.requery.android.database.sqlite.SQLiteDatabase.endTransaction(SQLiteDatabase:551)
+	at androidx.room.RoomDatabase.internalEndTransaction(RoomDatabase:594)
+	at androidx.room.RoomDatabase.endTransaction(RoomDatabase:584)
 ```
+
+The cause might be [changes in Android 7 Nougat](https://ericsink.com/entries/sqlite_android_n.html), which is why sqlite isn't bundled anymore since version 1.1970.
 
 <h2><a name="planned-features"></a>Planned features</h2>
 
@@ -320,7 +324,7 @@ Fonts, sizes, colors, etc should be material design whenever possible.
 * [(112) Which email provider do you recommend?](#user-content-faq112)
 * [(113) How does biometric authentication work?](#user-content-faq113)
 * [(114) Can you add an import for the settings of other email apps?](#user-content-faq114)
-* [(115) Can you add email address chips?](#user-content-faq115)
+* [~~(115) Can you add email address chips?~~](#user-content-faq115)
 * [~~(116) How can I show images in messages from trusted senders by default?~~](#user-content-faq116)
 * [(117) How can I restore a purchase (on another device) ?](#user-content-faq117)
 * [(118) What does 'Remove tracking parameters' exactly?](#user-content-faq118)
@@ -781,11 +785,13 @@ Note that this will result in extra internet traffic.
 
 &#x1F30E; [Google Translate](https://translate.google.com/translate?sl=en&u=https://github.com/M66B/FairEmail/blob/master/FAQ.md%23user-content-faq8)
 
+Firstly, Exchange *protocol* is not the same as Exchange *server* or Exchange *account*.
+
 The Microsoft Exchange Web Services (EWS) protocol [is being phased out](https://techcommunity.microsoft.com/t5/Exchange-Team-Blog/Upcoming-changes-to-Exchange-Web-Services-EWS-API-for-Office-365/ba-p/608055).
-Microsoft stopped updating the EWS libraries [in 2018](https://github.com/OfficeDev/ews-java-api).
+Microsoft stopped updating the EWS libraries [in 2016](https://github.com/OfficeDev/ews-java-api).
 So, it makes little sense to add this protocol anymore.
 
-You can use a Microsoft Exchange account if it is accessible via IMAP, which is mostly the case.
+You can use a Microsoft Exchange account if it is accessible via IMAP, which is almost always the case because all Exchange servers support the standard IMAP protocol.
 See [here](https://support.office.com/en-us/article/what-is-a-microsoft-exchange-account-47f000aa-c2bf-48ac-9bc2-83e5c6036793) for more information.
 
 Note that the desciption of FairEmail starts with the remark
@@ -889,22 +895,24 @@ Signing in short:
 * **Incoming** messages are verified with the **public key** of the sender
 
 To sign/encrypt a message, just select the appropriate method in the send dialog.
-You can always open the send dialog using the three-dots overflow menu in case you selected *Don't show again* before.
+The simplest way to show the send dialog (again) is to long press the *Send* button in the bottom action bar.
+It might be necessary to disable signing/encryption with the padlock icon in the top action bar first, to prevent the select key dialog, etc. from being in the way.
+The encryption method will be remembered for the selected identity (at the top of the message editor).
 
 To verify a signature or to decrypt a received message, open the message and just tap the gesture or padlock icon just below the message action bar.
 
-The first time you send a signed/encrypted message you might be asked for a sign key.
+The first time you send a signed/encrypted message, you might be asked for a sign key.
 FairEmail will automatically store the selected sign key in the used identity for the next time.
 If you need to reset the sign key, just save the identity or long press the identity in the list of identities and select *Reset sign key*.
 The selected sign key is visible in the list of identities.
 If need to select a key on a case by case basis, you can create multiple identities for the same account with the same email address.
 
-In the encryption settings you can select the default encryption method (PGP or S/MIME),
+In the encryption settings, you can select the default encryption method (PGP or S/MIME),
 enable *Sign by default*, *Encrypt by default* and *Automatically decrypt messages*,
 but be aware that automatic decryption is not possible if user interaction is required, like selecting a key or reading a security token.
 
 The to be encrypted message text/attachments and the decrypted message text/attachments are stored locally only and will never be added to the remote server.
-If you want to undo decryption, you can use the *resync* menu item in the three-dots menu of the message action bar.
+If you want to undo decryption, you can tap on the "close" padlock icon.
 
 <br />
 
@@ -1132,23 +1140,34 @@ Since version 1.1315 it is possible to use search expressions like this:
 apple +banana -cherry ?nuts
 ```
 
-This will result in searching like this:
+This will result in searching in the subject or text (only) like this:
 
 ```
 ("apple" AND "banana" AND NOT "cherry") OR "nuts"
 ```
 
-Search expressions can be used for searching on the device via the search index and for searching on the email server,
-but not for searching on the device without search index for performance reasons.
+Since version 1.1980 it is possible to use these prefixes as a search expression:
+
+```
+from:<email address>
+to:<email address>
+cc:<email address>
+bcc:<email address>
+keyword:<keyword>
+```
+
+There should be no space between the prefix and the search term, which will be applied as an AND-condition.
+
+Only AND conditions (+) and NOT conditions (-) can be used for on-device searching (since version 1.1981).
+If you try to use other search expressions, you get the error *Select a folder for a complex search*,
+which means that a folder in an account's folder list must be selected in order to perform the search on the server.
 
 Since version 1.1733 it is possible to save searches, which means that a named entry in the navigation menu will be created to repeat the same search later.
 You can save a search after searching by tapping on the save button in the top action bar.
 After repeating a search there will be a delete button at the same place to delete a saved search again.
 A saved search might be useful to quickly search for starred messages, or for messages from a specific email address, etc.
 
-Searching on the device is a free feature, using the search index and searching on the server is a pro feature.
-Note that you can download as many messages to your device as you like.
-The easiest way is to use the menu item *Fetch more messages* in the three-dots menu of the start screen.
+Using the search index is a pro feature.
 
 <br />
 
@@ -1487,7 +1506,8 @@ Too large messages and triggering the spam filter of an email server are the mos
 * *550 We're sorry, but we can't send your email. Either the subject matter, a link, or an attachment potentially contains spam, or phishing or malware.* means that the email provider considers an outgoing message as harmful.
 * *550 ...*, [see here](https://www.crazydomains.com.au/help/550-blocked-error-explained/) for a list of possible causes
 * *571 5.7.1 Message contains spam or virus or sender is blocked ...* means that the email server considered an outgoing message as spam. This probably means that the spam filters of the email server are too strict. You'll need to contact the email provider for support on this.
-* *451 4.7.0 Temporary server error. Please try again later. PRX4 ...*: please [see here](https://www.limilabs.com/blog/office365-temporary-server-error-please-try-again-later-prx4) or [see here](https://judeperera.wordpress.com/2019/10/11/fixing-451-4-7-0-temporary-server-error-please-try-again-later-prx4/).
+* *451 4.7.0 Temporary server error. Please try again later. PRX4 ...* indicates a server configuration problem, please [see here](https://www.limilabs.com/blog/office365-temporary-server-error-please-try-again-later-prx4) or [see here](https://judeperera.wordpress.com/2019/10/11/fixing-451-4-7-0-temporary-server-error-please-try-again-later-prx4/).
+* *451 4.7.0 Temporary server error. Please try again later. PRX5 ...* indicates a server configuration problem, please [see here](https://www.limilabs.com/qa/4471/451-4-7-0-temporary-server-error-please-try-again-later-prx5)
 * *571 5.7.1 Relay access denied*: please double check the username and email address in the advanced identity settings (via the manual setup).
 * Please [see here](https://support.google.com/a/answer/3726730) for more information and other SMTP error codes
 
@@ -1987,7 +2007,7 @@ The error '*Handshake failed SSL handshake terminated ... SSLV3_ALERT_HANDSHAKE_
 can be caused by [this Android 7.0 bug](https://issuetracker.google.com/issues/37122132). This can unfortunately not be fixed by FairEmail.
 
 The error '*Handshake failed ... UNSUPPORTED_PROTOCOL or TLSV1_ALERT_PROTOCOL_VERSION or SSLV3_ALERT_HANDSHAKE_FAILURE ...*'
-might be caused by enabling hardening connections, or requiring TLS 1.3 in the connection settings
+might be caused by enabling **hardening connections**, or requiring TLS 1.3 in the connection settings
 or by Android not supporting older protocols anymore, like SSLv3.
 
 Android 8 Oreo and later [do not support](https://developer.android.com/about/versions/oreo/android-8.0-changes#security-all) SSLv3 anymore.
@@ -2585,6 +2605,17 @@ and to set up auto deletion for the trash folder in the folder properties (long 
 If you want to forward a message, consider to use a *move* action instead.
 This will be more reliable than forwarding because forwarded messages might be considered as spam.
 
+<br>
+
+A *move* action can optionally create subfolders (since version 1.1966) to move messages to, for which you can use the following placeholders:
+
+```
+$week$
+$month$
+$year$
+$domain$
+```
+
 <br />
 
 Since message headers are not downloaded and stored by default to save on battery and data usage and to save storage space
@@ -2595,7 +2626,7 @@ Some common header conditions (regex):
 
 * *.&ast;Auto-Submitted:.&ast;* [RFC3834](https://tools.ietf.org/html/rfc3834)
 * *.&ast;List-Unsubscribe:.&ast;* [RFC3834](https://datatracker.ietf.org/doc/html/rfc2369)
-* *.&ast;Content-Type: multipart/report.&ast;* [RFC3462](https://tools.ietf.org/html/rfc3462)
+* *.&ast;Content-Type:.&ast;multipart/report.&ast;* [RFC3462](https://tools.ietf.org/html/rfc3462)
 
 To match *set* IMAP flags (keywords) via a header condition (since version 1.1777):
 
@@ -2627,6 +2658,8 @@ $$multifrom$ (since version 1.1791)
 $$automatic$ (since version 1.1862)
 $$lowpriority$ (since version 1.1958)
 $$highpriority$ (since version 1.1958)
+$$signed$ (since version 1.1981)
+$$encrypted$ (since version 1.1981)
 ```
 
 Note that *regex* should be disable and that there should be no white space.
@@ -3076,6 +3109,13 @@ Note that the POP3 protocol gives access to the inbox only. So, it is won't be p
 Note that you should not delete spam messages, also not from the spam folder,
 because the email server uses the messages in the spam folder to "learn" what spam messages are.
 
+If you are wondering why a message was moved into the spam folder, these are all possible reasons:
+
+* The email server of your email provider moved the message into the spam folder. The app can't undo this automatically because this can result in an endless loop.
+* The message classifier (miscellaneous settings tab page) moved the message into the spam folder.
+* A filter rule (navigation menu = left side menu of the start screen), for example a block domain name rule, moved the message into the spam folder.
+* An email address or a network address is on a block list (receive settings tab page).
+
 If you receive a lot of spam messages in your inbox, the best you can do is to contact the email provider to ask if spam filtering can be improved.
 
 Also, FairEmail can show a small red warning flag
@@ -3485,19 +3525,19 @@ Moreover, setting up an account/identity with the quick setup wizard is simple, 
 <br />
 
 <a name="faq115"></a>
-**(115) Can you add email address chips?**
+**~~(115) Can you add email address chips?~~**
 
 &#x1F30E; [Google Translate](https://translate.google.com/translate?sl=en&u=https://github.com/M66B/FairEmail/blob/master/FAQ.md%23user-content-faq115)
 
-Email address [chips](https://material.io/design/components/chips.html) look nice, but cannot be edited,
-which is quite inconvenient when you made a typo in an email address.
+~~Email address [chips](https://material.io/design/components/chips.html) look nice, but cannot be edited,~~
+~~which is quite inconvenient when you made a typo in an email address.~~
 
-Note that FairEmail will select the address only when long pressing an address, which makes it easy to delete an address.
+~~Note that FairEmail will select the address only when long pressing an address, which makes it easy to delete an address.~~
 
-Chips are not suitable for showing in a list
-and since the message header in a list should look similar to the message header of the message view it is not an option to use chips for viewing messages.
+~~Chips are not suitable for showing in a list~~
+~~and since the message header in a list should look similar to the message header of the message view it is not an option to use chips for viewing messages.~~
 
-Reverted [commit](https://github.com/M66B/FairEmail/commit/2c80c25b8aa75af2287f471b882ec87d5a5a5015).
+~~Reverted [commit](https://github.com/M66B/FairEmail/commit/2c80c25b8aa75af2287f471b882ec87d5a5a5015).~~
 
 <br />
 
@@ -3526,7 +3566,7 @@ You can select the account in the Play store app by tapping on the avatar at the
 Google manages all purchases, so as a developer I have little control over purchases.
 So, basically the only thing I can do, is give some advice:
 
-* Make sure you have an active, working internet connection
+* Make sure you have an active, working internet connection, and turn off any VPN based app because it might prevent the Play store from checking purchases
 * Make sure you are logged in with the right Google account and that there is nothing wrong with your Google account
 * Make sure you installed FairEmail via the right Google account if you configured multiple Google accounts on your device (you might need to reinstall the app)
 * Make sure the Play store app is up to date, please [see here](https://support.google.com/googleplay/answer/1050566?hl=en)
@@ -3719,6 +3759,13 @@ Note that the email server needs to support IMAP flags (keywords) for this featu
 
 Filter rules will be applied to the received receipt, so it is possible to move/archive the receipt.
 See [this FAQ](#user-content-faq71) for a header condition to recognize receipts.
+
+<br />
+
+*Block toolbar (version 1.1967+)*
+
+When enabled in the three-dots overflow menu of the message editor,
+a toolbar to perform operations (align text, insert list, indent text, insert blockquote) on a block of text (consecutive non-empty lines) will be shown.
 
 <br />
 
@@ -3960,10 +4007,12 @@ Note that FairEmail does support replying to calendar invites (a pro feature) an
 
 The confusing Microsoft specific server error *User is authenticated but not connected* might occur if:
 
-* External access was administratively disabled, please see [this article](https://docs.microsoft.com/en-us/exchange/clients-and-mobile-in-exchange-online/client-access-rules/client-access-rules) about how an administrator can enable it again
-* SMTP was administratively disabled, please see [this article](https://docs.microsoft.com/en-us/exchange/clients-and-mobile-in-exchange-online/authenticated-client-smtp-submission) about how an administrator can enable it again
+* External access is administratively disabled, please see [this article](https://docs.microsoft.com/en-us/exchange/clients-and-mobile-in-exchange-online/client-access-rules/client-access-rules) about how an administrator can enable it again
+* SMTP is administratively disabled, please see [this article](https://docs.microsoft.com/en-us/exchange/clients-and-mobile-in-exchange-online/authenticated-client-smtp-submission) about how an administrator can enable it again
+* Required server components are disabled, please see [this article](https://learn.microsoft.com/en-us/exchange/troubleshoot/user-and-shared-mailboxes/pop3-imap-owa-activesync-office-365) about enabling IMAP, MAPI, etc.
 * Push messages are enabled for too many folders: see [this FAQ](#user-content-faq23) for more information and a workaround
 * There were too many login attempts in a too short time, for example by using multiple email clients at the same time
+* An ad blocker or DNS changer is being used
 * There is a problem with the Exchange server license: it might be expired or for another server edition
 * An alias email address is being used as username instead of the primary email address
 * An incorrect login scheme is being used for a shared mailbox: the right scheme is *username@domain\SharedMailboxAlias*
@@ -4722,12 +4771,18 @@ Related questions:
 * The Play store version does not support Android Auto, see [this FAQ](#user-content-faq165) for more information
 * The Play store version does not support Amazon devices with Android 5 Lollipop because there are critical bugs in this Android version of Amazon
 * The Play Store version does not support Gravatars/Libravatars due to Play Store policies
-* The GitHub version will check for [updates on GitHub](https://github.com/M66B/FairEmail/releases) and is updated more frequently
+* The GitHub version will check for [updates on GitHub](https://github.com/M66B/FairEmail/releases) and is updated more frequently, but updates need to be installed manually
 * The GitHub version has some different links, some more options (like sharing the HTML of a message) and some different default values (more geared to advanced users)
-* The GitHub version can be installed as an update over the Play store version
+* The GitHub version can be installed as an update over the Play store version, whereas the F-Droid build can't (see below for more details)
 * The F-Droid build does not support OAuth, see [this FAQ](#user-content-faq147) about why not
 * The F-Droid build does not include [Google Play Billing](https://developer.android.com/google/play/billing/integrate), so Play store purchases cannot be reused
-* The F-Droid build is supported only if the version number is the same as the the version number of the latest GitHub version, see also [this FAQ](#user-content-faq147)
+* The F-Droid build is supported only if the version number is the same as the version number of the latest GitHub version, see also [this FAQ](#user-content-faq147)
+
+The Play store and GitHub version are signed with the [same digital signature](https://github.com/M66B/FairEmail#user-content-downloads) (security certificate).
+The F-Droid build is signed by the F-Droid organization with a different digital key.
+This means you can't update the F-Droid build with the Play store or GitHub version or the other way around without reinstalling.
+However, it is possible to install the GitHub version over the Play store version,
+and the Play store app will do the same, when auto updating isn't disabled for the app in the app description.
 
 <br />
 
@@ -4864,6 +4919,10 @@ Texts with suggestions will be marked and if you tap on a marked suggestion,
 it will be shown by the keyboard if the keyboard supports this,
 else you can double tap or long press the marked text to show suggestions.
 
+Since version 1.1974 there is an option to check paragraphs after a new line.
+
+The suboption *Use formal form* can be enabled to let LanguageTool suggest more formal text (business, legal, etc).
+
 <br />
 
 <a name="faq181"></a>
@@ -4952,11 +5011,19 @@ This is also to keep maintenance and support in the long term feasible.
 
 Note that there are already more features and options in FairEmail than in any other Android email client.
 
-If you have a question, want to request a feature or report a bug, **please use [this form](https://contact.faircode.eu/?product=fairemailsupport)**.
+<a name="quick-support"></a>
 
-Wenn Sie eine Frage haben, eine Funktion anfordern oder einen Fehler melden möchten, **verwenden Sie bitte [dieses Formular](https://contact.faircode.eu/?product=fairemailsupport)**.
+<br />
 
-Si vous avez une question, souhaitez demander une fonctionnalité ou signaler un bogue, **veuillez utiliser [ce formulaire](https://contact.faircode.eu/?product=fairemailsupport)**.
+&#x1F6DF; &#x1F6DF; &#x1F6DF; &#x1F6DF; &#x1F6DF;
+
+&#x1F1EC;&#x1F1E7; If you have a question, want to request a feature or report a bug, **please use [this form](https://contact.faircode.eu/?product=fairemailsupport)**.
+
+&#x1F1E9;&#x1F1EA; Wenn Sie eine Frage haben, eine Funktion anfordern oder einen Fehler melden möchten, **verwenden Sie bitte [dieses Formular](https://contact.faircode.eu/?product=fairemailsupport)**.
+
+&#x1F1EB;&#x1F1F7; Si vous avez une question, souhaitez demander une fonctionnalité ou signaler un bogue, **veuillez utiliser [ce formulaire](https://contact.faircode.eu/?product=fairemailsupport)**.
+
+<br />
 
 GitHub issues are disabled due to frequent misusage.
 

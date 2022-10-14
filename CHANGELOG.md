@@ -2,7 +2,167 @@
 
 &#x1F30E; [Google Translate](https://translate.google.com/translate?sl=en&u=https://github.com/M66B/FairEmail/blob/master/CHANGELOG.md)
 
+### [Mei long](https://en.wikipedia.org/wiki/Mei_long)
+
+### 1.1981 - 2022-10-13
+
+* Added AND (+) and NOT (-) search terms to on-device searching, see [the FAQ](https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq13)
+* Added filter conditions to match signed/encrypted messages, see [the FAQ](https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq71)
+* Small improvements and minor bug fixes
+* Updated Public Suffix List
+* Updated translations
+
+### 1.1980 - 2022-10-10
+
+* Added *cc:*, *bcc:* search prefixes, see [the FAQ](https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq13)
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1979 - 2022-10-09
+
+* Added *from:*, *to:* and *keyword:* search prefixes, see [the FAQ](https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq13)
+* Fixed orphan message files
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1978 - 2022-10-08
+
+* Fixed orphan message files
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1977 - 2022-10-08
+
+* Copy/delete instead of move message files
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1976 - 2022-10-08
+
+* © A means for the automated addition of intrinsically-paired punctuation marks to a text, through the use of text selection and interaction with a screen-based context menu
+* Optimized storing of messages
+* Small improvements and minor bug fixes
+* Updated AndroidX
+* Updated Public Suffix List
+* Updated translations
+
+### 1.1975 - 2022-10-06
+
+* Added Thunderbird label colors
+* Added decoding of Mandrill and Amazon tracking links
+* Fixed decoding of embedded messages
+* Reduced memory usage
+* Small improvements and minor bug fixes
+* Updated Public Suffix List
+* Updated translations
+
+### 1.1974 - 2022-10-03
+
+* Added long press date header to select messages
+* Added option to check paragraph with LanguageTool after a newline
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1973 - 2022-10-01
+
+* Added Ukrainian to DeepL languages
+* Added showing inline images in EML files
+* Improved word breaking for local searching
+* Small improvements and minor bug fixes
+* Updated Public Suffix List
+* Updated translations
+
+### 1.1972 - 2022-09-27
+
+* Fixed crash
+
+### 1.1971 - 2022-09-27
+
+* Fixed sqlite compatibility
+* Updated translations
+
+### 1.1970 - 2022-09-27
+
+* Switched to native sqlite
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1969 - 2022-09-23
+
+* Added Material You monochrome themes (Android 12+)
+* Small improvements and minor bug fixes
+* Updated AndroidX
+* Updated translations
+
+### 1.1968 - 2022-09-20
+
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1967 - 2022-09-19
+
+* Added warnings for unsafe attachment types
+* Added experimental text block toolbar
+* Added option for grouping messages by week
+* Extended ipinfo with city, region and country
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1966 - 2022-09-17
+
+* Added create subfolder option to move filter rule
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1965 - 2022-09-10
+
+* Added an advanced account option to use a VPN connection only
+* Reduced memory usage of message classifier
+* Small improvements and minor bug fixes
+* Updated AndroidX
+* Updated translations
+
 ### [Ledumahadi](https://en.wikipedia.org/wiki/Ledumahadi)
+
+### 1.1964 - 2022-09-05
+
+* Added 'whois' to open link dialog options
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1963 - 2022-09-03
+
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1962 - 2022-09-02
+
+* Added workaround for Outlook push messages (IMAP IDLE) bug
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1961 - 2022-09-01
+
+* Fixed OAuth
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1960 - 2022-08-31
+
+* Enabled sqlite sync extra
+
+### 1.1959 - 2022-08-31
+
+* Small improvements and minor bug fixes
+* Updated translations
+
+### 1.1958 - 2022-08-30
+
+* Added extra small/large font size to message editor
+* Small improvements and minor bug fixes
+* Updated Public Suffix List
+* Updated AndroidX
+* Updated translations
 
 ### 1.1957 - 2022-08-22
 

@@ -26,6 +26,7 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Build;
 import android.text.TextUtils;
 
@@ -44,8 +45,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-
-import io.requery.android.database.sqlite.SQLiteDatabase;
 
 public class WorkerCleanup extends Worker {
     private static final int CLEANUP_INTERVAL = 4; // hours
@@ -207,7 +206,7 @@ public class WorkerCleanup extends Worker {
             long now = new Date().getTime();
 
             List<File> files = new ArrayList<>();
-            File[] messages = new File(context.getFilesDir(), "messages").listFiles();
+            File[] messages = Helper.listFiles(new File(context.getFilesDir(), "messages")).toArray(new File[0]);
             File[] revision = new File(context.getFilesDir(), "revision").listFiles();
             File[] references = new File(context.getFilesDir(), "references").listFiles();
             File[] encryption = new File(context.getFilesDir(), "encryption").listFiles();
@@ -278,7 +277,7 @@ public class WorkerCleanup extends Worker {
 
             // Cleanup attachment files
             Log.i("Cleanup attachment files");
-            File[] attachments = new File(context.getFilesDir(), "attachments").listFiles();
+            File[] attachments = new File(EntityAttachment.getRoot(context), "attachments").listFiles();
             if (attachments != null)
                 for (File file : attachments)
                     if (manual || file.lastModified() + KEEP_FILES_DURATION < now)
@@ -334,21 +333,21 @@ public class WorkerCleanup extends Worker {
             Log.i("Cleanup FTS=" + fts);
             if (fts) {
                 int deleted = 0;
-                SQLiteDatabase sdb = FtsDbHelper.getInstance(context);
-                try (Cursor cursor = FtsDbHelper.getIds(sdb)) {
+                SQLiteDatabase sdb = Fts4DbHelper.getInstance(context);
+                try (Cursor cursor = Fts4DbHelper.getIds(sdb)) {
                     while (cursor.moveToNext()) {
                         long rowid = cursor.getLong(0);
                         EntityMessage message = db.message().getMessage(rowid);
                         if (message == null || !message.fts) {
                             Log.i("Deleting FTS rowid=" + rowid);
-                            FtsDbHelper.delete(sdb, rowid);
+                            Fts4DbHelper.delete(sdb, rowid);
                             deleted++;
                         }
                     }
                 }
                 Log.i("Cleanup FTS=" + deleted);
                 if (manual)
-                    FtsDbHelper.optimize(sdb);
+                    Fts4DbHelper.optimize(sdb);
             }
 
             Log.i("Cleanup contacts");

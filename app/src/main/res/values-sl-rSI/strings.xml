@@ -9,6 +9,8 @@
     <string name="app_continue">Vseeno nadaljuj</string>
     <string name="app_exit">Za izhod še enkrat pritisnite \'Nazaj\'.</string>
     <string name="app_cake">Premalo prostora za shranjevanje.</string>
+    <string name="app_cake_remaining">Nezaseden prostor na napravi: %1$s</string>
+    <string name="app_cake_required">Najmanjša zahtevana velikost prostora: %1$s</string>
     <string name="app_updated">Zadnja posodobitev: %1$s</string>
     <string name="app_download">Preneseno iz: %1$s</string>
     <string name="channel_service">Nadzor</string>
@@ -207,7 +209,7 @@
     <string name="title_setup_oauth_update">Ponovno odobri obstoječi račun (drugače ustvari novega)</string>
     <string name="title_setup_oauth_updated">Odobritev računa je bila posodobljena.</string>
     <string name="title_setup_oauth_authorize">Odobri</string>
-    <string name="title_setup_select_account">Izberite račun.</string>
+    <string name="title_setup_select_account">Izberi račun</string>
     <string name="title_setup_instructions">Navodila za nastavitev</string>
     <string name="title_setup_no_settings">Nastavitev za domeno \'%1$s\' ni bilo mogoče najti.</string>
     <string name="title_setup_no_settings_hint">Račun poizkusite ročno nastaviti z nastavitvami od vašega e-poštnega ponudnika.</string>
@@ -400,6 +402,7 @@
     <string name="title_advanced_signature_forward">Uporabi podpis za posredovano sporočilo</string>
     <string name="title_advanced_discard_delete">Trajno izbriši osnutek ob opustitvi osnutka</string>
     <string name="title_advanced_reply_move">Ob odgovoru na sporočilo shrani odgovor v isto mapo</string>
+    <string name="title_advanced_reply_move_inbox">Tudi za sporočila v mapi \'Prejeto\'</string>
     <string name="title_advanced_auto_link">Samodejno ustvari povezave</string>
     <string name="title_advanced_plain_only">Privzeto pošlji samo golo besedilo</string>
     <string name="title_advanced_flow">\'Tekoča oblika\' za golo besedilo</string>
@@ -416,6 +419,7 @@
     <string name="title_advanced_download_eml">Prejmi datoteke surovega sporočila</string>
     <string name="title_advanced_download_plain">Privzeto prejmi samo dele z golim besedilom (če je na voljo)</string>
     <string name="title_advanced_validated">Zahtevaj preverjeno povezavo</string>
+    <string name="title_advanced_validated_captive">Zahtevaj povezavo s preverjenim prestrežnim portalom</string>
     <string name="title_advanced_vpn_only">Poveži se samo preko VPN-a</string>
     <string name="title_advanced_timeout">Časovna omejitev povezave (v sekundah)</string>
     <string name="title_advanced_prefer_ip4">Prednost ima IPv4 pred IPv6</string>
@@ -455,6 +459,7 @@
     <string name="title_advanced_cards_shadow_highlight">Uporabi barvo poudarkov namesto barve odtenka</string>
     <string name="title_advanced_tabular_dividers">Uporabi ločilne črte ob uporabi sloga z zavihki</string>
     <string name="title_advanced_date_header">Združi po datumu</string>
+    <string name="title_advanced_date_week">Združi po tednih namesto po dnevih</string>
     <string name="title_advanced_date_fixed">Prikaži glavo s fiksnim datumom na vrhu</string>
     <string name="title_advanced_date_bold">Prikaži datum v krepkem</string>
     <string name="title_advanced_threading">Niti pogovorov</string>
@@ -663,6 +668,7 @@
     <string name="title_advanced_language">Jezik</string>
     <string name="title_advanced_language_system">Sistem</string>
     <string name="title_advanced_lt">Povezava z LanguageToolom</string>
+    <string name="title_advanced_lt_auto">Preveri odstavek po novi vrstici</string>
     <string name="title_advanced_deepl">Povezava z DeepL-om</string>
     <string name="title_advanced_virus_total">Povezava z VirusTotalom</string>
     <string name="title_advanced_sdcard">Želim uporabiti kartico SD</string>
@@ -677,6 +683,7 @@
     <string name="title_advanced_app">Nastavitve programa</string>
     <string name="title_advanced_more">Več možnosti</string>
     <string name="title_advanced_main_log">Glavno beleženje</string>
+    <string name="title_advanced_main_log_mem">Beleži porabo pomnilnika</string>
     <string name="title_advanced_protocol">Beleženje protokolov</string>
     <string name="title_advanced_log_info">Razhroščevalno beleženje</string>
     <string name="title_advanced_debug">Razhroščevalni način</string>
@@ -810,6 +817,7 @@
     <string name="title_account_category">Kategorija</string>
     <string name="title_account_name_hint">Uporablja se za razlikovanje map.</string>
     <string name="title_account_interval_hint">Pogostost osveževanja povezave za potisna sporočila ali preverjanja za nova sporočila.</string>
+    <string name="title_account_noop_hint">To bo dejavneje osveževalo povezavo, vendar tudi porabilo več energije.</string>
     <string name="title_account_partial_fetch_hint">Onemogočite to samo v primeru praznih sporočil ali okvarjenih prilog.</string>
     <string name="title_color">Barva</string>
     <string name="title_background">Ozadje</string>
@@ -850,6 +858,7 @@
     <string name="title_max_messages">Največje število prejetih sporočil (prazno za vse)</string>
     <string name="title_keep_poll_interval">Razmik med poizvedbami (min.)</string>
     <string name="title_keep_alive_interval">Razmik med osvežitvami (min.)</string>
+    <string name="title_keep_alive_noop">Občasno ponovno zaženi IMAP IDLE</string>
     <string name="title_server_time">Uporabi čas prejema (strežnik)</string>
     <string name="title_received_header">Uporabi glavo \'Prejeto\'</string>
     <string name="title_date_header">Uporabi glavo \'Datum\' (datum pošiljanja)</string>
@@ -1065,6 +1074,7 @@
     <string name="title_download_all">Prejmi vse</string>
     <string name="title_save_all">Shrani vse</string>
     <string name="title_save_eml">Shrani datoteko izvornega sporočila</string>
+    <string name="title_save_file">Shrani datoteko</string>
     <string name="title_eml_remark">Za posredovanje sporočil morajo biti surova (izvirna) sporočila prejeta z e-poštnega strežnika.  To zahteva internetno povezavo in sporočila morajo še vedno biti shranjena na strežniku.</string>
     <string name="title_eml_option">To lahko preprečite z omogočanjem stalnega prejemanja datotek surovih sporočil v nastavitvah povezave.</string>
     <string name="title_eml_downloaded">Prejeta surova sporočila:</string>
@@ -1130,6 +1140,7 @@
     <string name="title_no_folder">Mapa ne obstaja</string>
     <string name="title_no_format">Izvirno prejeto sporočilo bo vključeno.</string>
     <string name="title_no_search">Iskanje na strežniku za ta račun ni na voljo.</string>
+    <string name="title_complex_search" comment="title_complex_search&#10;This message will be shown when using a complex search (AND, OR, NOT, etc) when no folder is selected (for example the unified inbox is showing)">Izberite mapo za napredno iskanje</string>
     <string name="title_too_large">Sporočilo je preveliko za popolno preoblikovanje.</string>
     <string name="title_truncated">Sporočilo je preveliko za popoln prikaz.</string>
     <string name="title_insufficient_memory">Sporočilo je preveliko za razpoložljiv pomnilnik (%1$d).</string>
@@ -1147,7 +1158,7 @@
     <string name="title_attachments_incomplete">Nekatere predloge ali slike niso bile prejete in jih ni bilo mogoče dodati.</string>
     <string name="title_ask_save">Shrani spremembe?</string>
     <string name="title_ask_delete">Trajno izbriši sporočilo?</string>
-    <string name="title_ask_delete_accept">Razumem, da je trajen izbris sporočil nepovratno.</string>
+    <string name="title_ask_delete_accept">Razumem, da je trajen izbris sporočil nepovraten.</string>
     <string name="title_ask_delete_answer">Trajno izbriši predlogo za odgovor?</string>
     <string name="title_ask_delete_rule">Trajno izbriši pravilo?</string>
     <string name="title_ask_delete_attachments">Odstrani vse priloge?</string>
@@ -1212,9 +1223,11 @@
     <string name="title_style_italic">Ležeče</string>
     <string name="title_style_underline">Podčrtaj</string>
     <string name="title_style_size">Velikost</string>
+    <string name="title_style_size_xsmall">Zelo majhna</string>
     <string name="title_style_size_small">Majhna</string>
     <string name="title_style_size_medium">Srednja</string>
     <string name="title_style_size_large">Velika</string>
+    <string name="title_style_size_xlarge">Zelo velika</string>
     <string name="title_style_align">Poravnaj</string>
     <string name="title_style_align_start">Začetek</string>
     <string name="title_style_align_center">Sredina</string>
@@ -1254,6 +1267,7 @@
     <string name="title_save_drafts">Shrani osnutke na strežnik</string>
     <string name="title_send_dialog">Prikaži možnosti pošiljanja</string>
     <string name="title_image_dialog">Prikaži možnosti za slike</string>
+    <string name="title_block_toolbar">Or. vrstica za blok bes.</string>
     <string name="title_media_toolbar">Orodna vrstica predst.</string>
     <string name="title_manage_local_contacts">Upravljaj s krajevnimi stiki</string>
     <string name="title_insert_contact_group">Vstavi skupno stikov</string>
@@ -1301,6 +1315,7 @@
     <string name="title_text_reminder">Sporočilo je prazno.</string>
     <string name="title_attachment_keywords">priložena,priloženo,priložen,pripeta,pripeto,pripet,priloga,prilogi,priloge,priponka,priponki,priponke</string>
     <string name="title_attachment_reminder">Ali ste nameravali dodati prilogo?</string>
+    <string name="title_attachment_warning">Po možnosti nevarno: %1$s</string>
     <string name="title_plain_reminder">Vse oblikovanje bo izgubljeno</string>
     <string name="title_dsn_reminder">Trdi odboji škodujejo ugledu izvirnega pošiljatelja!</string>
     <string name="title_size_reminder">Sporočilo (%1$s) je večje od omejitev strežnika (%2$s).</string>
@@ -1447,6 +1462,7 @@
     <string name="title_answer_placeholder_email">Pošiljateljev e-poštni naslov</string>
     <string name="title_answer_placeholder_firstname">Pošiljateljevo ime</string>
     <string name="title_answer_placeholder_lastname">Pošiljateljev priimek</string>
+    <string name="title_answer_placeholder_date">Trenutni datum</string>
     <string name="title_rule_noop">Brez dejanja</string>
     <string name="title_rule_seen">Označi kot prebrano</string>
     <string name="title_rule_unseen">Označi kot neprebrano</string>
@@ -1489,6 +1505,7 @@
     <string name="title_rule_hours">Ur</string>
     <string name="title_rule_schedule_end">Od konca časovnega pogoja</string>
     <string name="title_rule_folder">Mapa</string>
+    <string name="title_rule_folder_create">Ustvari podmapo</string>
     <string name="title_rule_thread">Vsa sporočila v istem pogovoru in mapi</string>
     <string name="title_rule_identity">Identiteta</string>
     <string name="title_rule_template">Predloga za odgovor</string>
@@ -1649,7 +1666,7 @@
     <string name="title_hint_folder_actions">Dolg pritisk na mapo prikaže možnosti, kot so dodajanje mape v meni za krmarjenje za hitri dostop.</string>
     <string name="title_hint_folder_sync">Zaradi omejitve porabe energije in podatkov privzeto vse mape in sporočila ne bodo sinhronizirana.</string>
     <string name="title_hint_airplane">Način za letalo je vklopljen</string>
-    <string name="title_hint_notification">Obvestila so onemogočena</string>
+    <string name="title_hint_notifications">Ni dovoljenj za obvestila.</string>
     <string name="title_hint_support">Če imate vprašanje ali težavo, uporabite meni za podporo, da pridobite pomoč.</string>
     <string name="title_hint_message_actions">Povlecite levo za premik v smeti; povlecite desno za arhiviranje (če je na voljo).  Dejanja vlečenja lahko nastavite v nastavitvah računa.</string>
     <string name="title_hint_message_selection">Dolg pritisk na sporočilo omogoča izbiro več sporočil; držite in povlecite gor in dol za izbiro več sporočil.</string>
@@ -1688,6 +1705,9 @@
     <string name="title_undo">Razveljavi</string>
     <string name="title_redo">Uveljavi</string>
     <string name="title_insert_line">Vstavi črto</string>
+    <string name="title_select_block">Izberi blok besedila</string>
+    <string name="title_insert_brackets">Oklepaji</string>
+    <string name="title_insert_quotes">Navedek</string>
     <string name="title_add">Dodaj</string>
     <string name="title_browse">Odpri s/z</string>
     <string name="title_info">Infor.</string>

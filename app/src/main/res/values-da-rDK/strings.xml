@@ -9,6 +9,8 @@
     <string name="app_continue">Fortsæt alligevel</string>
     <string name="app_exit">Tryk \'Tilbage\' igen for at afslutte</string>
     <string name="app_cake">Utilstrækkelig tilgængelig lagerplads</string>
+    <string name="app_cake_remaining">Resterende lagerplads på enheden: %1$s</string>
+    <string name="app_cake_required">Krævede minimum af lagerplads: %1$s</string>
     <string name="app_updated">Senest opdateret: %1$s</string>
     <string name="app_download">Downloadet fra: %1$s</string>
     <string name="channel_service">Monitorering</string>
@@ -375,6 +377,7 @@
     <string name="title_advanced_signature_forward">Benyt signatur ved videresendelse</string>
     <string name="title_advanced_discard_delete">Ved kassering af udkast, slet dette permanent</string>
     <string name="title_advanced_reply_move">Ved beskedbesvarelse, gem svaret i pågældende mappe</string>
+    <string name="title_advanced_reply_move_inbox">Også for beskeder i indbakken</string>
     <string name="title_advanced_auto_link">Opret links automatisk</string>
     <string name="title_advanced_plain_only">Send kun simpel tekst som standard</string>
     <string name="title_advanced_flow">\'format flowed\' til simpel tekst</string>
@@ -391,6 +394,7 @@
     <string name="title_advanced_download_eml">Download råformat beskedfiler</string>
     <string name="title_advanced_download_plain">Download som standard kun simpel tekst dele (hvis tilgængelig)</string>
     <string name="title_advanced_validated">Kræv en valideret (kontrolleret) forbindelse</string>
+    <string name="title_advanced_validated_captive">Kræv testet/kontrolleret captive portal-forbindelse</string>
     <string name="title_advanced_vpn_only">Tilslut kun vha. VPN</string>
     <string name="title_advanced_timeout">Forbindelses-timeout (sekunder)</string>
     <string name="title_advanced_prefer_ip4">Foretræk IPv4 frem for IPv6</string>
@@ -430,6 +434,7 @@
     <string name="title_advanced_cards_shadow_highlight">Brug fremhævningsfarve i stedet for accentfarve</string>
     <string name="title_advanced_tabular_dividers">Brug skillelinjer ifm. tabelform</string>
     <string name="title_advanced_date_header">Gruppér efter dato</string>
+    <string name="title_advanced_date_week">Gruppér efter uge i stedet for dag</string>
     <string name="title_advanced_date_fixed">Vis fast datohoved øverst</string>
     <string name="title_advanced_date_bold">Vis dato med fed</string>
     <string name="title_advanced_threading">Samtaler i tråde</string>
@@ -639,6 +644,7 @@
     <string name="title_advanced_language">Sprog</string>
     <string name="title_advanced_language_system">System</string>
     <string name="title_advanced_lt">LanguageTool-integration</string>
+    <string name="title_advanced_lt_auto">Tjek afsnit efter en ny linje</string>
     <string name="title_advanced_deepl">DeepL-integration</string>
     <string name="title_advanced_virus_total">VirusTotal-integration</string>
     <string name="title_advanced_sdcard">Et SD-kort ønskes benyttet</string>
@@ -654,6 +660,7 @@
     <string name="title_advanced_app">App-indstillinger</string>
     <string name="title_advanced_more">Flere valgmuligheder</string>
     <string name="title_advanced_main_log">Hovedlogning</string>
+    <string name="title_advanced_main_log_mem">Log hukommelsesforbrug</string>
     <string name="title_advanced_protocol">Protokollogning</string>
     <string name="title_advanced_log_info">Fejllogning</string>
     <string name="title_advanced_debug">Fejlretningstilstand</string>
@@ -787,6 +794,7 @@
     <string name="title_account_category">Kategori</string>
     <string name="title_account_name_hint">Benyttes til mappedifferentiering</string>
     <string name="title_account_interval_hint">Opfriskningsfrekvensen af forbindelsen til push-beskeder eller frekvensen for tjek af nye beskeder</string>
+    <string name="title_account_noop_hint">Dette vil opdatere forbindelsen mere aktivt, men også forbruge mere batteristrøm</string>
     <string name="title_account_partial_fetch_hint">Deaktivér dette kun i tilfælde af tomme beskeder eller ødelagte vedhæftninger</string>
     <string name="title_color">Farve</string>
     <string name="title_background">Baggrund</string>
@@ -827,6 +835,7 @@
     <string name="title_max_messages">Maks. antal beskeder at downloade (tomt for samtlige)</string>
     <string name="title_keep_poll_interval">Polling-interval (minutter)</string>
     <string name="title_keep_alive_interval">Hold i live-interval (minutter)</string>
+    <string name="title_keep_alive_noop">Genstart periodisk IMAP IDLE</string>
     <string name="title_server_time">Benyt modtagelsestid (server)</string>
     <string name="title_received_header">Benyt \"Modtaget\"-overskrift</string>
     <string name="title_date_header">Benyt \'Dato\'-overskrift (afsendelsestid)</string>
@@ -1043,6 +1052,7 @@
     <string name="title_download_all">Download alle</string>
     <string name="title_save_all">Gem alt</string>
     <string name="title_save_eml">Gem besked i råformatsfil</string>
+    <string name="title_save_file">Gem fil</string>
     <string name="title_eml_remark">Beskedvideresendelse kræver download af de rå (originale) beskeder fra e-mailserveren. Dette kræver Internetforbindelse, og beskederne skal stadig lagres på e-mailserveren.</string>
     <string name="title_eml_option">Dette kan forhindres ved i forbindelsesindstillingerne at aktivere Download altid rå beskedfiler</string>
     <string name="title_eml_downloaded">Rå beskeder downloadet: %1$s</string>
@@ -1108,6 +1118,7 @@
     <string name="title_no_folder">Mappe findes ikke</string>
     <string name="title_no_format">Den oprindeligt modtagne besked bliver inkluderet</string>
     <string name="title_no_search">Søg på server er utilgængelig for denne konto</string>
+    <string name="title_complex_search" comment="title_complex_search&#10;This message will be shown when using a complex search (AND, OR, NOT, etc) when no folder is selected (for example the unified inbox is showing)">Vælg en mappe til en kompleks søgning</string>
     <string name="title_too_large">Besked for stor til fuldstændig omformatering</string>
     <string name="title_truncated">Besked for stor til fuldstændig visning</string>
     <string name="title_insufficient_memory">Besked for stor ift. tilgængelige hukommelse (%1$d)</string>
@@ -1191,9 +1202,11 @@
     <string name="title_style_italic">Kursiv</string>
     <string name="title_style_underline">Understegning</string>
     <string name="title_style_size">Størrelse</string>
+    <string name="title_style_size_xsmall">Ekstra lille</string>
     <string name="title_style_size_small">Lille</string>
     <string name="title_style_size_medium">Mellem</string>
     <string name="title_style_size_large">Stor</string>
+    <string name="title_style_size_xlarge">Ekstra stor</string>
     <string name="title_style_align">Justér</string>
     <string name="title_style_align_start">Start</string>
     <string name="title_style_align_center">Centrér</string>
@@ -1233,6 +1246,7 @@
     <string name="title_save_drafts">Gem udkast på serveren</string>
     <string name="title_send_dialog">Vis Send-muligheder</string>
     <string name="title_image_dialog">Vis Billed-muligheder</string>
+    <string name="title_block_toolbar">Blokværktøjsbjælke</string>
     <string name="title_media_toolbar">Medieværktøjsbjælke</string>
     <string name="title_manage_local_contacts">Håndtér lokale kontakter</string>
     <string name="title_insert_contact_group">Indsæt kontaktgruppe</string>
@@ -1280,6 +1294,7 @@
     <string name="title_text_reminder">Besked er tom</string>
     <string name="title_attachment_keywords">vedhæft,vedhæftet,vedhæftede,vedhæftning,vedhæftninger,vedhæftningen</string>
     <string name="title_attachment_reminder">Ville du tilføje en vedhæftning?</string>
+    <string name="title_attachment_warning">Potentiel fare: %1$s</string>
     <string name="title_plain_reminder">Al formatering vil gå tabt</string>
     <string name="title_dsn_reminder">Hard bounces skader den oprindelige afsenders e-mailomdømme!</string>
     <string name="title_size_reminder">Besked (%1$s) større end servergrænsen (%2$s)</string>
@@ -1426,6 +1441,7 @@
     <string name="title_answer_placeholder_email">Afsenders e-mailadresse</string>
     <string name="title_answer_placeholder_firstname">Afsenders: fornavn</string>
     <string name="title_answer_placeholder_lastname">Afsenders: efternavn</string>
+    <string name="title_answer_placeholder_date">Aktuelle dato</string>
     <string name="title_rule_noop">Ingen handling</string>
     <string name="title_rule_seen">Markér som læst</string>
     <string name="title_rule_unseen">Markér som ulæst</string>
@@ -1468,6 +1484,7 @@
     <string name="title_rule_hours">Timer</string>
     <string name="title_rule_schedule_end">Fra slutpunktet af tidsbetingelsen</string>
     <string name="title_rule_folder">Mappe</string>
+    <string name="title_rule_folder_create">Opret undermappe</string>
     <string name="title_rule_thread">Alle beskeder i samme samtale og mappe</string>
     <string name="title_rule_identity">Identitet</string>
     <string name="title_rule_template">Besvarelsesskabelon</string>
@@ -1628,7 +1645,7 @@
     <string name="title_hint_folder_actions">Langt tryk på en mappe for indstillinger, såsom tilføjelse af en mappe til navigeringsmenuen for hurtig adgang</string>
     <string name="title_hint_folder_sync">For at reducere strøm- og dataforbruget synkroniseres visse mapper og beskeder ikke som standard</string>
     <string name="title_hint_airplane">Flytilstand er Til</string>
-    <string name="title_hint_notification">Notifikationer er deaktiveret</string>
+    <string name="title_hint_notifications">Ingen notifikationstilladelser</string>
     <string name="title_hint_support">Har du et spørgsmål eller problem, så benyt venligst supportmenuen for at få hjælp</string>
     <string name="title_hint_message_actions">Stryg til venstre for Papirkurv; Stryg til højre for at arkivere (hvis tilgængeligt); Strygehandlingerne kan opsættes i kontoindstillingerne</string>
     <string name="title_hint_message_selection">Langt tryk på en besked for at tilgå valg af flere beskeder; Hold og stryg op/ned for at vælge flere beskeder</string>
@@ -1667,6 +1684,9 @@
     <string name="title_undo">Fortryd</string>
     <string name="title_redo">Annullér fortryd</string>
     <string name="title_insert_line">Indsæt linje</string>
+    <string name="title_select_block">Vælg blok</string>
+    <string name="title_insert_brackets">Indsæt kantede parenteser</string>
+    <string name="title_insert_quotes">Indsæt anførselstegn</string>
     <string name="title_add">Tilføj</string>
     <string name="title_browse">Åbn med</string>
     <string name="title_info">Info</string>

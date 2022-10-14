@@ -78,6 +78,7 @@ import androidx.preference.PreferenceManager;
 
 import java.net.IDN;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -93,6 +94,8 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
     private TextView tvOwnerRemark;
     private TextView tvHost;
     private TextView tvOwner;
+    private Button btnWhois;
+    private ContentLoadingProgressBar pbWhois;
     private Group grpOwner;
     private Button btnSettings;
     private Button btnDefault;
@@ -185,6 +188,8 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
         tvHost = dview.findViewById(R.id.tvHost);
         tvOwner = dview.findViewById(R.id.tvOwner);
         grpOwner = dview.findViewById(R.id.grpOwner);
+        btnWhois = dview.findViewById(R.id.btnWhois);
+        pbWhois = dview.findViewById(R.id.pbWhois);
         btnSettings = dview.findViewById(R.id.btnSettings);
         btnDefault = dview.findViewById(R.id.btnDefault);
         tvReset = dview.findViewById(R.id.tvReset);
@@ -362,9 +367,9 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
             @Override
             public void onClick(View view) {
                 Bundle args = new Bundle();
-                args.putParcelable("uri", uri);
+                args.putParcelable("uri", Uri.parse(etLink.getText().toString()));
 
-                new SimpleTask<Pair<InetAddress, IPInfo.Organization>>() {
+                new SimpleTask<Pair<InetAddress, IPInfo>>() {
                     @Override
                     protected void onPreExecute(Bundle args) {
                         ibMore.setEnabled(false);
@@ -384,15 +389,25 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
                     }
 
                     @Override
-                    protected Pair<InetAddress, IPInfo.Organization> onExecute(Context context, Bundle args) throws Throwable {
+                    protected Pair<InetAddress, IPInfo> onExecute(Context context, Bundle args) throws Throwable {
                         Uri uri = args.getParcelable("uri");
                         return IPInfo.getOrganization(uri, context);
                     }
 
                     @Override
-                    protected void onExecuted(Bundle args, Pair<InetAddress, IPInfo.Organization> data) {
+                    protected void onExecuted(Bundle args, Pair<InetAddress, IPInfo> data) {
+                        StringBuilder sb = new StringBuilder();
+                        IPInfo ipinfo = data.second;
+                        for (String value : new String[]{ipinfo.org, ipinfo.city, ipinfo.region, ipinfo.country})
+                            if (!TextUtils.isEmpty(value)) {
+                                if (sb.length() != 0)
+                                    sb.append("; ");
+                                sb.append(value.replaceAll("\\r?\\n", " "));
+                            }
+
                         tvHost.setText(data.first.toString());
-                        tvOwner.setText(data.second.name == null ? "?" : data.second.name);
+                        tvOwner.setText(sb.length() == 0 ? "?" : sb.toString());
+
                         ApplicationEx.getMainHandler().post(new Runnable() {
                             @Override
                             public void run() {
@@ -413,6 +428,69 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
         });
 
         tvOwnerRemark.setMovementMethod(LinkMovementMethod.getInstance());
+
+        btnWhois.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Bundle args = new Bundle();
+                args.putParcelable("uri", Uri.parse(etLink.getText().toString()));
+
+                new SimpleTask<String>() {
+                    @Override
+                    protected void onPreExecute(Bundle args) {
+                        btnWhois.setEnabled(false);
+                        pbWhois.setVisibility(View.VISIBLE);
+                    }
+
+                    @Override
+                    protected void onPostExecute(Bundle args) {
+                        btnWhois.setEnabled(true);
+                        pbWhois.setVisibility(View.GONE);
+                    }
+
+                    @Override
+                    protected String onExecute(Context context, Bundle args) throws Throwable {
+                        Uri uri = args.getParcelable("uri");
+                        String host = UriHelper.getRootDomain(context, UriHelper.getHost(uri));
+                        if (TextUtils.isEmpty(host))
+                            throw new UnknownHostException("Host unknown " + uri);
+                        args.putString("host", host);
+                        return Whois.get(host);
+                    }
+
+                    @Override
+                    protected void onExecuted(Bundle args, String whois) {
+                        final View dview = LayoutInflater.from(context).inflate(R.layout.dialog_whois, null);
+                        final TextView tvHost = dview.findViewById(R.id.tvHost);
+                        final TextView tvWhois = dview.findViewById(R.id.tvWhois);
+                        final ImageButton ibInfo = dview.findViewById(R.id.ibInfo);
+
+                        tvWhois.setMovementMethod(LinkMovementMethod.getInstance());
+
+                        ibInfo.setOnClickListener(new View.OnClickListener() {
+                            @Override
+                            public void onClick(View v) {
+                                Uri uri = Uri.parse(Whois.WHOIS_INFO);
+                                Helper.view(v.getContext(), uri, true);
+                            }
+                        });
+
+                        tvHost.setText(args.getString("host"));
+                        tvWhois.setText(whois);
+
+                        new AlertDialog.Builder(getContext())
+                                .setView(dview)
+                                .setPositiveButton(android.R.string.ok, null)
+                                .show();
+                    }
+
+                    @Override
+                    protected void onException(Bundle args, Throwable ex) {
+                        Log.unexpectedError(getParentFragmentManager(), ex);
+                    }
+                }.execute(FragmentDialogOpenLink.this, args, "link:whois");
+            }
+        });
 
         btnSettings.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -679,6 +757,8 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
         pbWait.setVisibility(View.GONE);
         tvOwnerRemark.setVisibility(show ? View.VISIBLE : View.GONE);
         grpOwner.setVisibility(View.GONE);
+        btnWhois.setVisibility(show && !BuildConfig.PLAY_STORE_RELEASE ? View.VISIBLE : View.GONE);
+        pbWhois.setVisibility(View.GONE);
         btnSettings.setVisibility(show ? View.VISIBLE : View.GONE);
         btnDefault.setVisibility(show && n ? View.VISIBLE : View.GONE);
         tvReset.setVisibility(show ? View.VISIBLE : View.GONE);

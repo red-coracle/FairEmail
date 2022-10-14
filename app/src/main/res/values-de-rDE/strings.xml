@@ -9,6 +9,8 @@
     <string name="app_continue">Trotzdem fortfahren</string>
     <string name="app_exit">Zum Beenden erneut „Zurück“ drücken</string>
     <string name="app_cake">Unzureichender Speicherplatz</string>
+    <string name="app_cake_remaining">Verbleibender Speicherplatz auf dem Gerät: %1$s</string>
+    <string name="app_cake_required">Minimaler erforderlicher Speicherplatz: %1$s</string>
     <string name="app_updated">Letzte Aktualisierung: %1$s</string>
     <string name="app_download">Heruntergeladen von: %1$s</string>
     <string name="channel_service">Überwachen</string>
@@ -373,6 +375,7 @@
     <string name="title_advanced_signature_forward">Signatur beim Weiterleiten hinzufügen</string>
     <string name="title_advanced_discard_delete">Entwürfe beim Verwerfen dauerhaft löschen</string>
     <string name="title_advanced_reply_move">Beim Antworten auf eine Nachricht die Antwort im selben Ordner speichern</string>
+    <string name="title_advanced_reply_move_inbox">Auch für Nachrichten im Posteingang</string>
     <string name="title_advanced_auto_link">Links automatisch erstellen</string>
     <string name="title_advanced_plain_only">Standardmäßig nur als unformatierten Text senden</string>
     <string name="title_advanced_flow">Format fließend für unformatierten Text</string>
@@ -389,6 +392,7 @@
     <string name="title_advanced_download_eml">Rohnachrichtendateien herunterladen</string>
     <string name="title_advanced_download_plain">Standardmäßig nur Textteile herunterladen (falls verfügbar)</string>
     <string name="title_advanced_validated">Erfordert eine validierte (geprüfte) Verbindung</string>
+    <string name="title_advanced_validated_captive">Erfordert eine geprüfte Captive-Portal-Verbindung</string>
     <string name="title_advanced_vpn_only">Nur über ein VPN verbinden</string>
     <string name="title_advanced_timeout">Zeitüberschreitung der Verbindung (Sekunden)</string>
     <string name="title_advanced_prefer_ip4">IPv4 gegenüber IPv6 bevorzugen</string>
@@ -428,6 +432,7 @@
     <string name="title_advanced_cards_shadow_highlight">Hervorhebungsfarbe statt Akzentfarbe verwenden</string>
     <string name="title_advanced_tabular_dividers">Trennlinien bei Verwendung der Tabellenform verwenden</string>
     <string name="title_advanced_date_header">Nach Datum gruppieren</string>
+    <string name="title_advanced_date_week">Nach Woche statt nach Tag gruppieren</string>
     <string name="title_advanced_date_fixed">Feste Datumskopfzeile oben anzeigen</string>
     <string name="title_advanced_date_bold">Datum fett anzeigen</string>
     <string name="title_advanced_threading">Themenbaum</string>
@@ -636,6 +641,7 @@
     <string name="title_advanced_language">Sprache</string>
     <string name="title_advanced_language_system">System</string>
     <string name="title_advanced_lt">LanguageTool-Integration</string>
+    <string name="title_advanced_lt_auto">Absatz nach einer neuen Zeile prüfen</string>
     <string name="title_advanced_deepl">DeepL-Einbindung</string>
     <string name="title_advanced_virus_total">VirusTotal-Integration</string>
     <string name="title_advanced_sdcard">Ich möchte eine SD-Karte verwenden</string>
@@ -651,6 +657,7 @@
     <string name="title_advanced_app">Android-App-Einstellungen</string>
     <string name="title_advanced_more">Weitere Optionen</string>
     <string name="title_advanced_main_log">Hauptprotokollierung</string>
+    <string name="title_advanced_main_log_mem">Speichernutzung protokollieren</string>
     <string name="title_advanced_protocol">Protokollaufzeichnung</string>
     <string name="title_advanced_log_info">Fehlerprotokollierung</string>
     <string name="title_advanced_debug">Fehlersuchmodus</string>
@@ -678,7 +685,7 @@
     <string name="title_advanced_folder_nav_hint">Damit kehren Sie von einer Nachrichtenliste immer zur Ordnerliste des betreffenden Kontos zurück.</string>
     <string name="title_advanced_suggest_names_hint">Wenn deaktiviert, werden nur E-Mail-Adressen bei der Auswahl von Kontakten verwendet</string>
     <string name="title_advanced_suggest_local_hint">Zusätzlich zu den von Android bereitgestellten Kontakten werden weitere Kontaktdaten für neue gesendete oder erhaltene Nachrichten nur dann gespeichert, wenn dies aktiviert ist.</string>
-    <string name="title_advanced_auto_identity_hint">Dadurch wird die zuletzt verwendete Identität, die für den zuletzt ausgewählten Empfänger einer neuen Nachricht benutzt wurde, verwendet</string>
+    <string name="title_advanced_auto_identity_hint">Dadurch wird die zuletzt verwendete Identität, die für den letzten ausgewählten Empfänger einer neuen Nachricht benutzt wurde, verwendet</string>
     <string name="title_advanced_send_reminders_hint">Eine Warnung anzeigen, wenn der Nachrichtentext oder der Betreff leer ist oder wenn ein Anhang zu fehlen scheint</string>
     <string name="title_advanced_reply_move_hint">Der E-Mail-Server könnte die Nachrichten trotzdem noch in den Ordner für gesendete Nachrichten hinzufügen</string>
     <string name="title_advanced_usenet_hint">Signaturtrenner »-- « zwischen Text und Signatur einfügen</string>
@@ -784,6 +791,7 @@
     <string name="title_account_category">Kategorie</string>
     <string name="title_account_name_hint">Wird verwendet, um Ordner zu unterscheiden</string>
     <string name="title_account_interval_hint">Häufigkeit der Aktualisierung der Verbindung für Push-Meldungen oder Häufigkeit der Überprüfung auf neue Nachrichten</string>
+    <string name="title_account_noop_hint">Dies wird die Verbindung aktiver aktualisieren, aber auch mehr Akkuleistung verbrauchen</string>
     <string name="title_account_partial_fetch_hint">Nur bei Nachrichten ohne Inhalt oder beschädigten Anhängen deaktivieren</string>
     <string name="title_color">Farbe</string>
     <string name="title_background">Hintergrund</string>
@@ -824,6 +832,7 @@
     <string name="title_max_messages">Maximale Anzahl der Nachrichten zum Herunterladen (leer für alle)</string>
     <string name="title_keep_poll_interval">Abrufintervall (Minuten)</string>
     <string name="title_keep_alive_interval">Aktivitätsintervall (Minuten)</string>
+    <string name="title_keep_alive_noop">IMAP IDLE periodisch neu starten</string>
     <string name="title_server_time">Empfangzeit verwenden (Server)</string>
     <string name="title_received_header">Received-Kopfzeile verwenden</string>
     <string name="title_date_header">Date-Kopfzeile verwenden (Sendezeit)</string>
@@ -1038,6 +1047,7 @@
     <string name="title_download_all">Alle herunterladen</string>
     <string name="title_save_all">Alles speichern</string>
     <string name="title_save_eml">Rohdaten speichern</string>
+    <string name="title_save_file">Datei speichern</string>
     <string name="title_eml_remark">Um Nachrichten weiterzuleiten, müssen die ursprünglichen Nachrichten vom E-Mail-Server heruntergeladen werden. Dazu ist eine Internetverbindung erforderlich und die Nachrichten müssen noch auf dem E-Mail-Server verfügbar sein.</string>
     <string name="title_eml_option">Das kann verhindert werden, indem in den Verbindungseinstellungen „Rohnachrichtendateien herunterladen“ eingeschaltet wird</string>
     <string name="title_eml_downloaded">Rohnachrichten heruntergeladen: %1$s</string>
@@ -1103,6 +1113,7 @@
     <string name="title_no_folder">Ordner nicht vorhanden</string>
     <string name="title_no_format">Die ursprünglich empfangene Nachricht wird miteinbezogen</string>
     <string name="title_no_search">Die Suche auf dem Server ist für dieses Konto nicht verfügbar</string>
+    <string name="title_complex_search" comment="title_complex_search&#10;This message will be shown when using a complex search (AND, OR, NOT, etc) when no folder is selected (for example the unified inbox is showing)">Für eine umfangreiche Suche einen Ordner auswählen</string>
     <string name="title_too_large">Nachricht zu groß, um sie vollständig umformatieren zu können</string>
     <string name="title_truncated">Nachricht zu groß, um vollständig angezeigt zu werden</string>
     <string name="title_insufficient_memory">Nachricht zu groß für den verfügbaren Speicher (%1$d)</string>
@@ -1184,9 +1195,11 @@
     <string name="title_style_italic">Kursiv</string>
     <string name="title_style_underline">Unterstreichen</string>
     <string name="title_style_size">Größe</string>
+    <string name="title_style_size_xsmall">Sehr klein</string>
     <string name="title_style_size_small">Klein</string>
     <string name="title_style_size_medium">Mittel</string>
     <string name="title_style_size_large">Groß</string>
+    <string name="title_style_size_xlarge">Sehr groß</string>
     <string name="title_style_align">Ausrichtung</string>
     <string name="title_style_align_start">Anfang</string>
     <string name="title_style_align_center">Zentriert</string>
@@ -1226,6 +1239,7 @@
     <string name="title_save_drafts">Entwürfe auf dem Server speichern</string>
     <string name="title_send_dialog">Sendeoptionen anzeigen</string>
     <string name="title_image_dialog">Grafikoptionen anzeigen</string>
+    <string name="title_block_toolbar">Textblockleiste</string>
     <string name="title_media_toolbar">Mediensymbolleiste</string>
     <string name="title_manage_local_contacts">Lokale Kontakte verwalten</string>
     <string name="title_insert_contact_group">Kontaktgruppe einfügen</string>
@@ -1273,6 +1287,7 @@
     <string name="title_text_reminder">Nachricht ist leer</string>
     <string name="title_attachment_keywords">angehängt,Anhang,Anhänge,beigefügt,Anlage,Anlagen,anbei,liegt bei,beigelegt</string>
     <string name="title_attachment_reminder">Beabsichtigen Sie einen Anhang hinzuzufügen?</string>
+    <string name="title_attachment_warning">Möglicherweise gefährlich: %1$s</string>
     <string name="title_plain_reminder">Alle Formatierungen gehen verloren</string>
     <string name="title_dsn_reminder">Unzustellbarkeitsnachrichten schaden dem E-Mail-Ruf des ursprünglichen Absenders!</string>
     <string name="title_size_reminder">Nachricht (%1$s) größer als Serverbegrenzung (%2$s)</string>
@@ -1420,6 +1435,7 @@
     <string name="title_answer_placeholder_email">E-Mail-Adresse des Absenders</string>
     <string name="title_answer_placeholder_firstname">Vorname des Absenders</string>
     <string name="title_answer_placeholder_lastname">Nachname des Absenders</string>
+    <string name="title_answer_placeholder_date">Aktuelles Datum</string>
     <string name="title_rule_noop">Keine Aktion</string>
     <string name="title_rule_seen">Gelesen kennzeichnen</string>
     <string name="title_rule_unseen">Als ungelesen kennzeichnen</string>
@@ -1462,6 +1478,7 @@
     <string name="title_rule_hours">Stunden</string>
     <string name="title_rule_schedule_end">Vom Ende der Zeitbedingung</string>
     <string name="title_rule_folder">Ordner</string>
+    <string name="title_rule_folder_create">Unterordner erstellen</string>
     <string name="title_rule_thread">Alle Nachrichten zur selben Unterhaltung und Ordner</string>
     <string name="title_rule_identity">Identität</string>
     <string name="title_rule_template">Antwortvorlage</string>
@@ -1622,7 +1639,7 @@
     <string name="title_hint_folder_actions">Drücken Sie lange auf einen Ordner für Optionen, wie das Hinzufügen eines Ordners in die Navigation für schnellen Zugriff</string>
     <string name="title_hint_folder_sync">Um Akkuverbrauch und Datennutzung zu reduzieren, werden standardmäßig nicht alle Ordner und E-Mails synchronisiert</string>
     <string name="title_hint_airplane">Flugzeugmodus aktiviert</string>
-    <string name="title_hint_notification">Benachrichtigungen sind deaktiviert</string>
+    <string name="title_hint_notifications">Keine Benachrichtigungserlaubnis</string>
     <string name="title_hint_support">Wenn Sie eine Frage oder ein Problem haben, verwenden Sie bitte die Hilfe im Menü</string>
     <string name="title_hint_message_actions">Standard: Wische links zum Papierkorb; Wische rechts zum Archiv (falls verfügbar); Diese Wischgesten können aber in den Kontoeinstellungen auch individuell anders konfiguriert werden</string>
     <string name="title_hint_message_selection">Um mehrere Nachrichten auszuwählen, drücken Sie zunächst lange auf eine Nachricht, halten und wischen Sie sodann nach oben oder unten, um weitere Nachrichten auszuwählen</string>
@@ -1661,6 +1678,9 @@
     <string name="title_undo">Rückgängig</string>
     <string name="title_redo">Wiederherstellen</string>
     <string name="title_insert_line">Linie einfügen</string>
+    <string name="title_select_block">Block auswählen</string>
+    <string name="title_insert_brackets">Einklammern</string>
+    <string name="title_insert_quotes">Zitieren</string>
     <string name="title_add">Hinzufügen</string>
     <string name="title_browse">Öffnen mit</string>
     <string name="title_info">Info</string>

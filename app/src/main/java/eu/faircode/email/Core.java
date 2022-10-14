@@ -616,8 +616,7 @@ class Core {
                                         EntityOperation.BODY.equals(op.name)) ||
                                 EntityOperation.ATTACHMENT.equals(op.name) ||
                                 ((op.tries >= LOCAL_RETRY_MAX || attachments > 0) &&
-                                        EntityOperation.ADD.equals(op.name) &&
-                                        EntityFolder.DRAFTS.equals(folder.type)) ||
+                                        EntityOperation.ADD.equals(op.name)) ||
                                 (op.tries >= LOCAL_RETRY_MAX &&
                                         EntityOperation.SYNC.equals(op.name) &&
                                         (account.protocol == EntityAccount.TYPE_POP ||
@@ -1089,7 +1088,7 @@ class Core {
                 archived = (imessages != null && imessages.length > 0);
             } finally {
                 if (iarchive.isOpen())
-                    iarchive.close();
+                    iarchive.close(false);
             }
 
             if (archived)
@@ -1399,6 +1398,7 @@ class Core {
         boolean seen = jargs.optBoolean(1);
         boolean unflag = jargs.optBoolean(3);
         boolean delete = jargs.optBoolean(4);
+        boolean create = jargs.optBoolean(5);
 
         Flags flags = ifolder.getPermanentFlags();
 
@@ -1410,6 +1410,21 @@ class Core {
             throw new IllegalArgumentException("self");
         if (!target.selectable)
             throw new IllegalArgumentException("not selectable type=" + target.type);
+
+        if (create) {
+            Folder icreate = istore.getFolder(target.name);
+            if (!icreate.exists()) {
+                ((IMAPFolder) ifolder).doCommand(new IMAPFolder.ProtocolCommand() {
+                    @Override
+                    public Object doCommand(IMAPProtocol protocol) throws ProtocolException {
+                        protocol.create(target.name);
+                        return null;
+                    }
+                });
+                ifolder.setSubscribed(true);
+                db.folder().resetFolderTbc(target.id);
+            }
+        }
 
         // De-classify
         if (!copy &&
@@ -1626,7 +1641,7 @@ class Core {
                 Log.w(ex);
             } finally {
                 if (itarget.isOpen())
-                    itarget.close();
+                    itarget.close(false);
             }
 
         // Delete junk contacts
@@ -2321,7 +2336,7 @@ class Core {
                             try {
                                 itarget.open(READ_WRITE);
                                 itarget.setSubscribed(subscribed);
-                                itarget.close();
+                                itarget.close(false);
                             } catch (MessagingException ex) {
                                 Log.w(ex);
                             }
@@ -2625,6 +2640,8 @@ class Core {
                             folder.download = parent.download;
                             folder.auto_classify_source = parent.auto_classify_source;
                             folder.auto_classify_target = parent.auto_classify_target;
+                            folder.sync_days = parent.sync_days;
+                            folder.keep_days = parent.keep_days;
                             folder.unified = parent.unified;
                             folder.navigation = parent.navigation;
                             folder.notify = parent.notify;
@@ -2771,15 +2788,31 @@ class Core {
 
             EntityLog.log(context, folder.name + " purging=" + idelete.size() + "/" + imessages.length);
             if (account.isYahooJp()) {
-                for (Message imessage : idelete)
-                    imessage.setFlag(Flags.Flag.DELETED, true);
+                for (Message imessage : new ArrayList<>(idelete))
+                    try {
+                        imessage.setFlag(Flags.Flag.DELETED, true);
+                    } catch (MessagingException mex) {
+                        Log.w(mex);
+                        idelete.remove(imessage);
+                    }
             } else {
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
                 int chunk_size = prefs.getInt("chunk_size", DEFAULT_CHUNK_SIZE);
 
                 Flags flags = new Flags(Flags.Flag.DELETED);
                 for (List<Message> list : Helper.chunkList(idelete, chunk_size))
-                    ifolder.setFlags(list.toArray(new Message[0]), flags, true);
+                    try {
+                        ifolder.setFlags(list.toArray(new Message[0]), flags, true);
+                    } catch (MessagingException ex) {
+                        Log.w(ex);
+                        for (Message imessage : list)
+                            try {
+                                imessage.setFlag(Flags.Flag.DELETED, true);
+                            } catch (MessagingException mex) {
+                                Log.w(mex);
+                                idelete.remove(imessage);
+                            }
+                    }
             }
             Log.i(folder.name + " purge deleted");
             expunge(context, ifolder, idelete);
@@ -2829,7 +2862,7 @@ class Core {
         }
     }
 
-    private static void onRule(Context context, JSONArray jargs, EntityMessage message) throws JSONException, IOException, AddressException {
+    private static void onRule(Context context, JSONArray jargs, EntityMessage message) throws JSONException, MessagingException {
         // Download message body
         DB db = DB.getInstance(context);
 
@@ -2896,7 +2929,7 @@ class Core {
                 MessageHelper helper = new MessageHelper((MimeMessage) imessages[imessages.length - 1], context);
                 String msgid = helper.getMessageID();
                 if (msgid != null) {
-                    int count = db.message().countMessageByMsgId(folder.id, msgid);
+                    int count = db.message().countMessageByMsgId(folder.id, msgid, true);
                     if (count == 1) {
                         Log.i(account.name + " POP having last msgid=" + msgid);
                         sync = false;
@@ -4055,6 +4088,30 @@ class Core {
 
                         message = dup;
                         process = true;
+                    } else if (msgid != null && EntityFolder.DRAFTS.equals(folder.type)) {
+                        try {
+                            if (dup.uid < uid) {
+                                MimeMessage existing = (MimeMessage) ifolder.getMessageByUID(dup.uid);
+                                if (existing != null &&
+                                        msgid.equals(existing.getHeader(MessageHelper.HEADER_CORRELATION_ID, null))) {
+                                    Log.e(folder.name + " late draft" +
+                                            " host=" + account.host + " uid=" + dup.uid + "<" + uid);
+                                    existing.setFlag(Flags.Flag.DELETED, true);
+                                    expunge(context, ifolder, Arrays.asList(existing));
+                                    db.message().setMessageUiHide(dup.id, true);
+                                }
+                            } else if (dup.uid > uid) {
+                                if (msgid.equals(imessage.getHeader(MessageHelper.HEADER_CORRELATION_ID, null))) {
+                                    Log.e(folder.name + " late draft" +
+                                            " host=" + account.host + " uid=" + dup.uid + ">" + uid);
+                                    imessage.setFlag(Flags.Flag.DELETED, true);
+                                    expunge(context, ifolder, Arrays.asList(imessage));
+                                    return null;
+                                }
+                            }
+                        } catch (Throwable ex) {
+                            Log.e(ex);
+                        }
                     }
                 }
 
@@ -4250,27 +4307,12 @@ class Core {
 
             boolean check_blocklist = prefs.getBoolean("check_blocklist", false);
             if (check_blocklist) {
-                boolean notJunk = false;
-                if (message.from != null)
-                    for (Address from : message.from) {
-                        String email = ((InternetAddress) from).getAddress();
-                        if (TextUtils.isEmpty(email))
-                            continue;
-                        EntityContact contact = db.contact().getContact(message.account, EntityContact.TYPE_NO_JUNK, email);
-                        if (contact != null) {
-                            contact.times_contacted++;
-                            contact.last_contacted = new Date().getTime();
-                            db.contact().updateContact(contact);
-                            notJunk = true;
-                        }
-                    }
-
                 if (!have &&
                         !EntityFolder.isOutgoing(folder.type) &&
                         !EntityFolder.ARCHIVE.equals(folder.type) &&
                         !EntityFolder.TRASH.equals(folder.type) &&
                         !EntityFolder.JUNK.equals(folder.type) &&
-                        !notJunk &&
+                        !message.isNotJunk(context) &&
                         !Arrays.asList(message.keywords).contains(MessageHelper.FLAG_NOT_JUNK))
                     try {
                         message.blocklist = DnsBlockList.isJunk(context,
@@ -4996,7 +5038,7 @@ class Core {
         }
 
         // Auto disable partial fetch
-        if (account.partial_fetch) {
+        if (account.partial_fetch && false) {
             account.partial_fetch = false;
             DB db = DB.getInstance(context);
             db.account().setAccountPartialFetch(account.id, account.partial_fetch);
@@ -6076,6 +6118,8 @@ class Core {
             if (!started)
                 return true;
             if (!running)
+                return false;
+            if (thread == null)
                 return false;
             return thread.isAlive();
         }
