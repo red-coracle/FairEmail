@@ -86,6 +86,9 @@ public interface DaoIdentity {
     @Query("SELECT * FROM identity WHERE id = :id")
     EntityIdentity getIdentity(long id);
 
+    @Query("SELECT * FROM identity WHERE uuid = :uuid")
+    EntityIdentity getIdentityByUUID(String uuid);
+
     @Insert
     long insertIdentity(EntityIdentity identity);
 
@@ -113,12 +116,18 @@ public interface DaoIdentity {
     int setIdentityPassword(long account, String user, String password, int auth_type, String domain);
 
     @Query("UPDATE identity" +
-            " SET password = :password, auth_type = :new_auth_type" +
+            " SET password = :password, auth_type = :new_auth_type, provider = :provider" +
             " WHERE account = :account" +
             " AND user = :user" +
             " AND auth_type = :auth_type" +
-            " AND NOT (password IS :password AND auth_type IS :new_auth_type)")
-    int setIdentityPassword(long account, String user, String password, int auth_type, int new_auth_type);
+            " AND NOT (password IS :password AND auth_type IS :new_auth_type AND provider = :provider)")
+    int setIdentityPassword(long account, String user, String password, int auth_type, int new_auth_type, String provider);
+
+    @Query("UPDATE identity" +
+            " SET fingerprint = :fingerprint" +
+            " WHERE account = :account" +
+            " AND NOT (fingerprint IS :fingerprint)")
+    int setIdentityFingerprint(long account, String fingerprint);
 
     @Query("UPDATE identity SET last_connected = :last_connected WHERE id = :id AND NOT (last_connected IS :last_connected)")
     int setIdentityConnected(long id, long last_connected);
@@ -134,6 +143,9 @@ public interface DaoIdentity {
 
     @Query("UPDATE identity SET max_size = :max_size WHERE id = :id AND NOT (max_size IS :max_size)")
     int setIdentityMaxSize(long id, Long max_size);
+
+    @Query("UPDATE identity SET signature = :hmtl WHERE id = :id AND NOT (signature IS :hmtl)")
+    int setIdentitySignature(long id, String hmtl);
 
     @Query("UPDATE identity SET error = :error WHERE id = :id AND NOT (error IS :error)")
     int setIdentityError(long id, String error);

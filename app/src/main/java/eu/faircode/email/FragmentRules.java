@@ -21,7 +21,6 @@ package eu.faircode.email;
 
 import static android.app.Activity.RESULT_OK;
 
-import android.Manifest;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
@@ -76,6 +75,7 @@ public class FragmentRules extends FragmentBase {
 
     private boolean cards;
 
+    private View view;
     private RecyclerView rvRule;
     private ContentLoadingProgressBar pbWait;
     private Group grpReady;
@@ -110,7 +110,7 @@ public class FragmentRules extends FragmentBase {
         setSubtitle(R.string.title_edit_rules);
         setHasOptionsMenu(true);
 
-        View view = inflater.inflate(R.layout.fragment_rules, container, false);
+        view = inflater.inflate(R.layout.fragment_rules, container, false);
 
         // Get controls
         rvRule = view.findViewById(R.id.rvRule);
@@ -224,10 +224,21 @@ public class FragmentRules extends FragmentBase {
         SearchView searchView = (SearchView) menuSearch.getActionView();
         searchView.setQueryHint(getString(R.string.title_rules_search_hint));
 
-        if (!TextUtils.isEmpty(searching)) {
-            menuSearch.expandActionView();
-            searchView.setQuery(searching, true);
-        }
+        final String search = searching;
+        view.post(new RunnableEx("rules:search") {
+            @Override
+            public void delegate() {
+                if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+                    return;
+
+                if (TextUtils.isEmpty(search))
+                    menuSearch.collapseActionView();
+                else {
+                    menuSearch.expandActionView();
+                    searchView.setQuery(search, true);
+                }
+            }
+        });
 
         getViewLifecycleOwner().getLifecycle().addObserver(new LifecycleObserver() {
             @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
@@ -240,7 +251,7 @@ public class FragmentRules extends FragmentBase {
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextChange(String newText) {
-                if (getView() != null) {
+                if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)) {
                     searching = newText;
                     adapter.search(newText);
                 }
@@ -249,8 +260,10 @@ public class FragmentRules extends FragmentBase {
 
             @Override
             public boolean onQueryTextSubmit(String query) {
-                searching = query;
-                adapter.search(query);
+                if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)) {
+                    searching = query;
+                    adapter.search(query);
+                }
                 return true;
             }
         });
@@ -284,6 +297,7 @@ public class FragmentRules extends FragmentBase {
 
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_TITLE, "fairemail_" +
                 new SimpleDateFormat("yyyyMMdd").format(new Date().getTime()) + ".rules");
@@ -294,6 +308,7 @@ public class FragmentRules extends FragmentBase {
     private void onMenuImport() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setType("*/*");
         startActivityForResult(intent, REQUEST_IMPORT);
     }
@@ -315,9 +330,18 @@ public class FragmentRules extends FragmentBase {
         args.putParcelable("uri", data.getData());
 
         new SimpleTask<Void>() {
+            private Toast toast = null;
+
             @Override
             protected void onPreExecute(Bundle args) {
-                ToastEx.makeText(getContext(), R.string.title_executing, Toast.LENGTH_LONG).show();
+                toast = ToastEx.makeText(getContext(), R.string.title_executing, Toast.LENGTH_LONG);
+                toast.show();
+            }
+
+            @Override
+            protected void onPostExecute(Bundle args) {
+                if (toast != null)
+                    toast.cancel();
             }
 
             @Override
@@ -339,11 +363,29 @@ public class FragmentRules extends FragmentBase {
                     JSONObject jaction = new JSONObject(rule.action);
 
                     int type = jaction.getInt("type");
-                    if (type == EntityRule.TYPE_MOVE || type == EntityRule.TYPE_COPY) {
-                        long target = jaction.optLong("target", -1);
-                        EntityFolder f = db.folder().getFolder(target);
-                        if (f != null)
-                            jaction.put("folderType", f.type);
+                    switch (type) {
+                        case EntityRule.TYPE_MOVE:
+                        case EntityRule.TYPE_COPY:
+                            long target = jaction.optLong("target", -1);
+                            EntityFolder f = db.folder().getFolder(target);
+                            EntityAccount a = (f == null ? null : db.account().getAccount(f.account));
+                            if (a != null)
+                                jaction.put("targetAccountUuid", a.uuid);
+                            if (f != null) {
+                                jaction.put("targetFolderType", f.type);
+                                jaction.put("targetFolderName", f.name);
+                            }
+                            break;
+                        case EntityRule.TYPE_ANSWER:
+                            long identity = jaction.getLong("identity");
+                            long answer = jaction.getLong("answer");
+                            EntityIdentity i = db.identity().getIdentity(identity);
+                            EntityAnswer t = db.answer().getAnswer(answer);
+                            if (i != null)
+                                jaction.put("identityUuid", i.uuid);
+                            if (t != null)
+                                jaction.put("answerUuid", t.uuid);
+                            break;
                     }
 
                     rule.action = jaction.toString();
@@ -354,6 +396,8 @@ public class FragmentRules extends FragmentBase {
                 ContentResolver resolver = context.getContentResolver();
                 try (OutputStream os = resolver.openOutputStream(uri)) {
                     Log.i("Writing URI=" + uri);
+                    if (os == null)
+                        throw new FileNotFoundException(uri.toString());
                     os.write(jrules.toString(2).getBytes());
                 }
 
@@ -382,9 +426,18 @@ public class FragmentRules extends FragmentBase {
         args.putParcelable("uri", data.getData());
 
         new SimpleTask<Void>() {
+            private Toast toast = null;
+
             @Override
             protected void onPreExecute(Bundle args) {
-                ToastEx.makeText(getContext(), R.string.title_executing, Toast.LENGTH_LONG).show();
+                toast = ToastEx.makeText(getContext(), R.string.title_executing, Toast.LENGTH_LONG);
+                toast.show();
+            }
+
+            @Override
+            protected void onPostExecute(Bundle args) {
+                if (toast != null)
+                    toast.cancel();
             }
 
             @Override
@@ -392,20 +445,15 @@ public class FragmentRules extends FragmentBase {
                 long fid = args.getLong("folder");
                 Uri uri = args.getParcelable("uri");
 
-                if (uri == null)
-                    throw new FileNotFoundException();
-
-                if (!"content".equals(uri.getScheme()) &&
-                        !Helper.hasPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)) {
-                    Log.w("Import uri=" + uri);
-                    throw new IllegalArgumentException(context.getString(R.string.title_no_stream));
-                }
+                NoStreamException.check(uri, context);
 
                 StringBuilder data = new StringBuilder();
 
                 Log.i("Reading URI=" + uri);
                 ContentResolver resolver = context.getContentResolver();
                 try (InputStream is = resolver.openInputStream(uri)) {
+                    if (is == null)
+                        throw new FileNotFoundException(uri.toString());
                     BufferedReader reader = new BufferedReader(new InputStreamReader(is));
                     String line;
                     while ((line = reader.readLine()) != null)
@@ -422,21 +470,52 @@ public class FragmentRules extends FragmentBase {
                     if (folder == null)
                         return null;
 
-                    for (int i = 0; i < jrules.length(); i++) {
-                        JSONObject jrule = jrules.getJSONObject(i);
+                    for (int r = 0; r < jrules.length(); r++) {
+                        JSONObject jrule = jrules.getJSONObject(r);
                         EntityRule rule = EntityRule.fromJSON(jrule);
 
                         JSONObject jaction = new JSONObject(rule.action);
 
                         int type = jaction.getInt("type");
-                        if (type == EntityRule.TYPE_MOVE || type == EntityRule.TYPE_COPY) {
-                            String folderType = jaction.optString("folderType");
-                            if (!EntityFolder.SYSTEM.equals(folderType) &&
-                                    !EntityFolder.USER.equals(folderType)) {
-                                EntityFolder f = db.folder().getFolderByType(folder.account, folderType);
-                                if (f != null)
-                                    jaction.put("target", f.id);
-                            }
+                        switch (type) {
+                            case EntityRule.TYPE_MOVE:
+                            case EntityRule.TYPE_COPY:
+                                String targetAccountUuid = jaction.optString("targetAccountUuid");
+                                String targetFolderName = jaction.optString("targetFolderName");
+                                if (!TextUtils.isEmpty(targetAccountUuid) && !TextUtils.isEmpty(targetFolderName)) {
+                                    EntityAccount a = db.account().getAccountByUUID(targetAccountUuid);
+                                    if (a != null) {
+                                        EntityFolder f = db.folder().getFolderByName(a.id, targetFolderName);
+                                        if (f != null) {
+                                            jaction.put("target", f.id);
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                String folderType = jaction.optString("targetFolderType");
+                                if (TextUtils.isEmpty(folderType))
+                                    folderType = jaction.optString("folderType"); // legacy
+                                if (!EntityFolder.SYSTEM.equals(folderType) &&
+                                        !EntityFolder.USER.equals(folderType)) {
+                                    EntityFolder f = db.folder().getFolderByType(folder.account, folderType);
+                                    if (f != null)
+                                        jaction.put("target", f.id);
+                                }
+                                break;
+
+                            case EntityRule.TYPE_ANSWER:
+                                String identityUuid = jaction.optString("identityUuid");
+                                String answerUuid = jaction.optString("answerUuid");
+                                if (!TextUtils.isEmpty(identityUuid) && !TextUtils.isEmpty(answerUuid)) {
+                                    EntityIdentity i = db.identity().getIdentityByUUID(identityUuid);
+                                    EntityAnswer a = db.answer().getAnswerByUUID(answerUuid);
+                                    if (i != null && a != null) {
+                                        jaction.put("identity", i.id);
+                                        jaction.put("answer", a.id);
+                                        break;
+                                    }
+                                }
                         }
 
                         rule.action = jaction.toString();
@@ -462,8 +541,9 @@ public class FragmentRules extends FragmentBase {
 
             @Override
             protected void onException(Bundle args, Throwable ex) {
-                if (ex instanceof IllegalArgumentException ||
-                        ex instanceof FileNotFoundException ||
+                if (ex instanceof NoStreamException)
+                    ((NoStreamException) ex).report(getActivity());
+                else if (ex instanceof FileNotFoundException ||
                         ex instanceof JSONException)
                     ToastEx.makeText(getContext(), ex.getMessage(), Toast.LENGTH_LONG).show();
                 else

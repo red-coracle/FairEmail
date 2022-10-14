@@ -18,7 +18,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <eu.faircode.email.FixedImageButton
+    <ImageButton
         android:id="@+id/ibNext"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -29,7 +29,7 @@
         app:layout_constraintTop_toTopOf="@+id/etSearch"
         app:srcCompat="@drawable/twotone_fast_forward_24" />
 
-    <eu.faircode.email.FixedTextView
+    <TextView
         android:id="@+id/tvNoFolder"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -94,7 +94,7 @@
         app:layout_constraintStart_toEndOf="@id/btnFavorite2"
         app:layout_constraintTop_toBottomOf="@id/tvNoFolder" />
 
-    <eu.faircode.email.FixedImageButton
+    <ImageButton
         android:id="@+id/ibResetFavorites"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

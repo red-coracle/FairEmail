@@ -59,7 +59,7 @@ public class WorkerFts extends Worker {
             Context context = getApplicationContext();
 
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-            boolean checkpoints = prefs.getBoolean("checkpoints", true);
+            boolean checkpoints = prefs.getBoolean("sqlite_checkpoints", true);
 
             int indexed = 0;
             List<Long> ids = new ArrayList<>(INDEX_BATCH_SIZE);
@@ -67,49 +67,52 @@ public class WorkerFts extends Worker {
 
             SQLiteDatabase sdb = FtsDbHelper.getInstance(context);
 
-            Cursor cursor = db.message().getMessageFts();
-            while (cursor != null && cursor.moveToNext())
-                try {
-                    long id = cursor.getLong(0);
-                    Log.i("FTS index=" + id);
-
-                    ids.add(id);
-
-                    EntityMessage message = db.message().getMessage(id);
-                    if (message == null) {
-                        Log.i("FTS gone");
-                        continue;
-                    }
-
-                    File file = message.getFile(context);
-                    String text = HtmlHelper.getFullText(file);
-                    if (text == null)
-                        text = "";
-
-                    boolean fts = prefs.getBoolean("fts", false);
-                    if (!fts)
-                        break;
-
+            try (Cursor cursor = db.message().getMessageFts()) {
+                while (cursor != null && cursor.moveToNext())
                     try {
-                        sdb.beginTransaction();
-                        FtsDbHelper.insert(sdb, message, text);
-                        sdb.setTransactionSuccessful();
-                    } finally {
-                        sdb.endTransaction();
+                        long id = cursor.getLong(0);
+                        Log.i("FTS index=" + id);
+
+                        ids.add(id);
+
+                        EntityMessage message = db.message().getMessage(id);
+                        if (message == null) {
+                            Log.i("FTS gone");
+                            continue;
+                        }
+
+                        File file = message.getFile(context);
+                        String text = HtmlHelper.getFullText(file);
+                        if (text == null)
+                            text = "";
+
+                        boolean fts = prefs.getBoolean("fts", false);
+                        if (!fts)
+                            break;
+
+                        try {
+                            sdb.beginTransaction();
+                            FtsDbHelper.insert(sdb, message, text);
+                            sdb.setTransactionSuccessful();
+                        } finally {
+                            sdb.endTransaction();
+                        }
+
+                        indexed++;
+
+                        if (ids.size() >= INDEX_BATCH_SIZE)
+                            markIndexed(db, ids);
+                    } catch (Throwable ex) {
+                        Log.e(ex);
                     }
-
-                    indexed++;
-
-                    if (ids.size() > INDEX_BATCH_SIZE)
-                        markIndexed(db, ids);
-                } catch (Throwable ex) {
-                    Log.e(ex);
-                }
+            }
 
             markIndexed(db, ids);
 
-            if (checkpoints)
+            if (checkpoints) {
                 DB.checkpoint(context);
+                Helper.sync();
+            }
 
             Log.i("FTS indexed=" + indexed);
             return Result.success();

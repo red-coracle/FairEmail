@@ -74,9 +74,9 @@ public interface DaoAccount {
             " LEFT JOIN folder AS sent ON sent.account = account.id AND sent.type = '" + EntityFolder.SENT + "'" +
             " WHERE :all OR account.synchronize" +
             " GROUP BY account.id" +
-            " ORDER BY account.`order`" +
+            " ORDER BY account.category COLLATE NOCASE" +
+            ", account.`order`" +
             ", account.`primary` DESC" +
-            ", account.category COLLATE NOCASE" +
             ", account.name COLLATE NOCASE")
     LiveData<List<TupleAccountEx>> liveAccountsEx(boolean all);
 
@@ -147,13 +147,17 @@ public interface DaoAccount {
     @Query("SELECT * FROM account WHERE uuid = :uuid")
     EntityAccount getAccountByUUID(String uuid);
 
+    @Query("SELECT * FROM account WHERE auth_type = :auth_type AND user = :user")
+    EntityAccount getAccount(int auth_type, String user);
+
     @Query("SELECT * FROM account WHERE name = :name")
     EntityAccount getAccount(String name);
 
     @Query("SELECT * FROM account" +
             " WHERE user = :user" +
-            " AND auth_type IN (:auth_type)")
-    List<EntityAccount> getAccounts(String user, int[] auth_type);
+            " AND pop = :protocol" +
+            " AND tbd IS NULL")
+    List<EntityAccount> getAccounts(String user, int protocol);
 
     @Query("SELECT * FROM account WHERE `primary`")
     EntityAccount getPrimaryAccount();
@@ -167,14 +171,19 @@ public interface DaoAccount {
     @Query(TupleAccountView.query)
     LiveData<List<TupleAccountView>> liveAccountView();
 
-    @Query("SELECT account.id" +
+    String swipes = "SELECT account.id" +
             ", account.swipe_left, l.type AS left_type, l.name AS left_name, l.color AS left_color" +
             ", account.swipe_right, r.type AS right_type, r.name AS right_name, r.color AS right_color" +
             " FROM account" +
             " LEFT JOIN folder_view l ON l.id = account.swipe_left" +
             " LEFT JOIN folder_view r ON r.id = account.swipe_right" +
-            " WHERE :account IS NULL OR account.id = :account")
+            " WHERE :account IS NULL OR account.id = :account";
+
+    @Query(swipes)
     LiveData<List<TupleAccountSwipes>> liveAccountSwipes(Long account);
+
+    @Query(swipes)
+    List<TupleAccountSwipes> getAccountSwipes(Long account);
 
     @Insert
     long insertAccount(EntityAccount account);
@@ -206,11 +215,20 @@ public interface DaoAccount {
     @Query("UPDATE account SET name = :name WHERE id = :id AND NOT (name IS :name)")
     int setAccountName(long id, String name);
 
+    @Query("UPDATE account SET color = :color WHERE id = :id AND NOT (color IS :color)")
+    int setAccountColor(long id, Integer color);
+
     @Query("UPDATE account" +
-            " SET password = :password, auth_type = :auth_type" +
+            " SET password = :password, auth_type = :auth_type, provider = :provider" +
             " WHERE id = :id" +
-            " AND NOT (password IS :password AND auth_type = :auth_type)")
-    int setAccountPassword(long id, String password, int auth_type);
+            " AND NOT (password IS :password AND auth_type = :auth_type AND provider = :provider)")
+    int setAccountPassword(long id, String password, int auth_type, String provider);
+
+    @Query("UPDATE account" +
+            " SET fingerprint = :fingerprint" +
+            " WHERE id = :id" +
+            " AND NOT (fingerprint IS :fingerprint)")
+    int setAccountFingerprint(long id, String fingerprint);
 
     @Query("UPDATE account SET last_connected = :last_connected WHERE id = :id AND NOT (last_connected IS :last_connected)")
     int setAccountConnected(long id, Long last_connected);

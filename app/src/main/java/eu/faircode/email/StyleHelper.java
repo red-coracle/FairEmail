@@ -23,12 +23,16 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.text.Editable;
 import android.text.Layout;
+import android.text.NoCopySpan;
+import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
+import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.style.AlignmentSpan;
 import android.text.style.BackgroundColorSpan;
@@ -62,10 +66,8 @@ import com.flask.colorpicker.builder.ColorPickerDialogBuilder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 public class StyleHelper {
     private static final List<Class> CLEAR_STYLES = Collections.unmodifiableList(Arrays.asList(
@@ -75,11 +77,13 @@ public class StyleHelper {
             BackgroundColorSpan.class,
             ForegroundColorSpan.class,
             AlignmentSpan.class,
-            BulletSpan.class,
+            BulletSpanEx.class, NumberSpan.class,
             QuoteSpan.class, IndentSpan.class,
             StrikethroughSpan.class,
             URLSpan.class,
-            TypefaceSpan.class, CustomTypefaceSpan.class
+            TypefaceSpan.class, CustomTypefaceSpan.class,
+            MarkSpan.class,
+            InsertedSpan.class
     ));
 
     static boolean apply(int action, LifecycleOwner owner, View anchor, EditText etBody, Object... args) {
@@ -159,9 +163,25 @@ public class StyleHelper {
                 {
                     SubMenu smenu = popupMenu.getMenu().findItem(R.id.menu_style_size).getSubMenu();
                     smenu.clear();
-                    int[] ids = new int[]{R.id.menu_style_size_small, R.id.menu_style_size_medium, R.id.menu_style_size_large};
-                    int[] titles = new int[]{R.string.title_style_size_small, R.string.title_style_size_medium, R.string.title_style_size_large};
-                    float[] sizes = new float[]{HtmlHelper.FONT_SMALL, 1.0f, HtmlHelper.FONT_LARGE};
+                    int[] ids = new int[]{
+                            R.id.menu_style_size_xsmall,
+                            R.id.menu_style_size_small,
+                            R.id.menu_style_size_medium,
+                            R.id.menu_style_size_large,
+                            R.id.menu_style_size_xlarge
+                    };
+                    int[] titles = new int[]{
+                            R.string.title_style_size_xsmall,
+                            R.string.title_style_size_small,
+                            R.string.title_style_size_medium,
+                            R.string.title_style_size_large,
+                            R.string.title_style_size_xlarge};
+                    float[] sizes = new float[]{
+                            HtmlHelper.FONT_XSMALL,
+                            HtmlHelper.FONT_SMALL,
+                            1.0f,
+                            HtmlHelper.FONT_LARGE,
+                            HtmlHelper.FONT_XLARGE};
                     for (int i = 0; i < ids.length; i++) {
                         SpannableStringBuilder ssb = new SpannableStringBuilderEx(context.getString(titles[i]));
                         ssb.setSpan(new RelativeSizeSpan(sizes[i]), 0, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -194,6 +214,7 @@ public class StyleHelper {
                 IndentSpan[] indents = edit.getSpans(start, end, IndentSpan.class);
                 popupMenu.getMenu().findItem(R.id.menu_style_indentation_decrease).setEnabled(indents.length > 0);
 
+                popupMenu.getMenu().findItem(R.id.menu_style_parenthesis).setEnabled(BuildConfig.DEBUG);
                 popupMenu.getMenu().findItem(R.id.menu_style_code).setEnabled(BuildConfig.DEBUG);
 
                 popupMenu.insertIcons(context);
@@ -225,8 +246,12 @@ public class StyleHelper {
                                 return setBlockQuote(item);
                             } else if (groupId == R.id.group_style_indentation) {
                                 return setIndentation(item);
+                            } else if (groupId == R.id.group_style_mark) {
+                                return setMark(item);
                             } else if (groupId == R.id.group_style_strikethrough) {
                                 return setStrikeThrough(item);
+                            } else if (groupId == R.id.group_style_parenthesis) {
+                                return setParenthesis(item);
                             } else if (groupId == R.id.group_style_code) {
                                 return setCode(item);
                             } else if (groupId == R.id.group_style_clear) {
@@ -243,10 +268,14 @@ public class StyleHelper {
                         Log.breadcrumb("style", "action", "size");
 
                         Float size;
-                        if (item.getItemId() == R.id.menu_style_size_small)
+                        if (item.getItemId() == R.id.menu_style_size_xsmall)
+                            size = HtmlHelper.FONT_XSMALL;
+                        else if (item.getItemId() == R.id.menu_style_size_small)
                             size = HtmlHelper.FONT_SMALL;
                         else if (item.getItemId() == R.id.menu_style_size_large)
                             size = HtmlHelper.FONT_LARGE;
+                        else if (item.getItemId() == R.id.menu_style_size_xlarge)
+                            size = HtmlHelper.FONT_XLARGE;
                         else
                             size = null;
 
@@ -606,6 +635,32 @@ public class StyleHelper {
                         return true;
                     }
 
+                    private boolean setMark(MenuItem item) {
+                        Log.breadcrumb("style", "action", "strike");
+
+                        Context context = etBody.getContext();
+
+                        boolean has = false;
+                        MarkSpan[] spans = edit.getSpans(start, end, MarkSpan.class);
+                        for (MarkSpan span : spans) {
+                            int s = edit.getSpanStart(span);
+                            int e = edit.getSpanEnd(span);
+                            int f = edit.getSpanFlags(span);
+                            edit.removeSpan(span);
+                            if (splitSpan(edit, start, end, s, e, f, true,
+                                    new MarkSpan(), new MarkSpan()))
+                                has = true;
+                        }
+
+                        if (!has)
+                            edit.setSpan(new MarkSpan(), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+
+                        etBody.setText(edit);
+                        etBody.setSelection(end);
+
+                        return true;
+                    }
+
                     private boolean setStrikeThrough(MenuItem item) {
                         Log.breadcrumb("style", "action", "strike");
 
@@ -630,7 +685,15 @@ public class StyleHelper {
                         return true;
                     }
 
+                    private boolean setParenthesis(MenuItem item) {
+                        Log.breadcrumb("style", "action", "parenthesis");
+                        edit.insert(end, ")");
+                        edit.insert(start, "(");
+                        return true;
+                    }
+
                     private boolean setCode(MenuItem item) {
+                        Log.breadcrumb("style", "action", "code");
                         _setSize(HtmlHelper.FONT_SMALL);
                         _setFont("monospace");
                         return true;
@@ -681,38 +744,26 @@ public class StyleHelper {
                 Log.breadcrumb("style", "action", "link");
 
                 String url = (String) args[0];
+                String title = (String) args[1];
 
-                List<CharacterStyle> spans = new ArrayList<>();
-                Map<CharacterStyle, Pair<Integer, Integer>> ranges = new HashMap<>();
-                Map<CharacterStyle, Integer> flags = new HashMap<>();
-                for (CharacterStyle span : edit.getSpans(start, end, CharacterStyle.class)) {
-                    if (!(span instanceof URLSpan)) {
-                        spans.add(span);
-                        ranges.put(span, new Pair<>(edit.getSpanStart(span), edit.getSpanEnd(span)));
-                        flags.put(span, edit.getSpanFlags(span));
-                    }
+                URLSpan[] spans = edit.getSpans(start, end, URLSpan.class);
+                for (URLSpan span : spans)
                     edit.removeSpan(span);
+
+                if (!TextUtils.isEmpty(url)) {
+                    if (TextUtils.isEmpty(title))
+                        title = url;
+
+                    if (start == end)
+                        edit.insert(start, title);
+                    else if (!title.equals(edit.subSequence(start, end).toString()))
+                        edit.replace(start, end, title);
+
+                    edit.setSpan(new URLSpan(url), start, start + title.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 }
-
-                if (url != null) {
-                    int e = end;
-                    if (start == end) {
-                        etBody.getText().insert(start, url);
-                        e += url.length();
-                    }
-
-                    edit.setSpan(new URLSpan(url), start, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                }
-
-                // Restore other spans
-                for (CharacterStyle span : spans)
-                    edit.setSpan(span,
-                            ranges.get(span).first,
-                            ranges.get(span).second,
-                            flags.get(span));
 
                 etBody.setText(edit);
-                etBody.setSelection(end, end);
+                etBody.setSelection(start + title.length());
 
                 return true;
             } else if (action == R.id.menu_clear) {
@@ -925,18 +976,38 @@ public class StyleHelper {
         }
     }
 
+    static void markAsInserted(Editable text, int start, int end) {
+        for (InsertedSpan span : text.getSpans(0, text.length(), InsertedSpan.class))
+            text.removeSpan(span);
+        if (start >= 0 && start < end && end <= text.length())
+            text.setSpan(new InsertedSpan(), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+    }
+
+    static class InsertedSpan implements NoCopySpan {
+    }
+
+    static class MarkSpan extends BackgroundColorSpan {
+        public MarkSpan() {
+            super(Color.YELLOW);
+        }
+
+        @Override
+        public void updateDrawState(@NonNull TextPaint textPaint) {
+            super.updateDrawState(textPaint);
+            textPaint.setColor(Color.BLACK);
+        }
+    }
+
     static String getFamily(String family) {
         // https://web.mit.edu/jmorzins/www/fonts.html
         // https://en.wikipedia.org/wiki/Croscore_fonts
         // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family
         // TODO: Microsoft: Georgia (Serif), Tahoma (Sans-serif), Trebuchet MS (Sans-serif)
         String faces = family.toLowerCase(Locale.ROOT);
-        if (faces.contains("open sans"))
-            return "Open Sans, Arial, Verdana, Helvetica, Helvetica Neue, sans-serif";
         if (faces.contains("montserrat"))
-            return "Montserrat, sans-serif";
+            return "Montserrat, Gotham, \"Proxima Nova\", sans-serif";
         if (faces.contains("arimo"))
-            return "Arimo, Arial, Verdana, Helvetica, Helvetica Neue, sans-serif";
+            return "Arimo, Arial, Verdana, Helvetica, \"Helvetica Neue\", sans-serif";
         if (faces.contains("tinos"))
             return "Tinos, \"Times New Roman\", Times, serif";
         if (faces.contains("cousine"))
@@ -971,46 +1042,45 @@ public class StyleHelper {
                     .replace("\"", ""));
 
         if (faces.contains("fairemail"))
-            return ResourcesCompat.getFont(context, R.font.fantasy);
+            return ResourcesCompat.getFont(context.getApplicationContext(), R.font.fantasy);
 
         if (bundled_fonts) {
-            if (faces.contains("open sans"))
-                return ResourcesCompat.getFont(context, R.font.opensans);
-
-            if (faces.contains("montserrat"))
-                return ResourcesCompat.getFont(context, R.font.montserrat);
+            if (faces.contains("montserrat") ||
+                    faces.contains("gotham") ||
+                    faces.contains("proxima nova"))
+                return ResourcesCompat.getFont(context.getApplicationContext(), R.font.montserrat);
 
             if (faces.contains("arimo") ||
                     faces.contains("arial") ||
                     faces.contains("verdana") ||
                     faces.contains("helvetica") ||
                     faces.contains("helvetica neue"))
-                return ResourcesCompat.getFont(context, R.font.arimo);
+                return ResourcesCompat.getFont(context.getApplicationContext(), R.font.arimo);
 
             if (faces.contains("tinos") ||
                     faces.contains("times") ||
                     faces.contains("times new roman"))
-                return ResourcesCompat.getFont(context, R.font.tinos);
+                return ResourcesCompat.getFont(context.getApplicationContext(), R.font.tinos);
 
             if (faces.contains("cousine") ||
                     faces.contains("courier") ||
                     faces.contains("courier new"))
-                return ResourcesCompat.getFont(context, R.font.cousine);
+                return ResourcesCompat.getFont(context.getApplicationContext(), R.font.cousine);
 
             if (faces.contains("lato") ||
                     faces.contains("carlito") ||
                     faces.contains("calibri"))
-                return ResourcesCompat.getFont(context, R.font.lato);
+                return ResourcesCompat.getFont(context.getApplicationContext(), R.font.lato);
 
             if (faces.contains("caladea") ||
                     faces.contains("cambo") ||
                     faces.contains("cambria"))
-                return ResourcesCompat.getFont(context, R.font.caladea);
+                return ResourcesCompat.getFont(context.getApplicationContext(), R.font.caladea);
 
             if (faces.contains("opendyslexic") ||
                     faces.contains("comic sans") ||
                     faces.contains("comic sans ms"))
-                return ResourcesCompat.getFont(context, R.font.opendyslexic);
+                return ResourcesCompat.getFont(context.getApplicationContext(), R.font.opendyslexic);
         }
 
         for (String face : faces) {
@@ -1045,7 +1115,6 @@ public class StyleHelper {
             result.add(new FontDescriptor("caladea", "Caladea (Cambria)", true));
 
             if (BuildConfig.DEBUG) {
-                result.add(new FontDescriptor("open sans", "Open Sans", true));
                 result.add(new FontDescriptor("montserrat", "Montserrat", true));
             }
 

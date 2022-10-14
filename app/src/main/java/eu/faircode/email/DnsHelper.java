@@ -29,6 +29,8 @@ import android.os.Build;
 
 import androidx.annotation.NonNull;
 
+import org.xbill.DNS.AAAARecord;
+import org.xbill.DNS.ARecord;
 import org.xbill.DNS.Lookup;
 import org.xbill.DNS.MXRecord;
 import org.xbill.DNS.Message;
@@ -92,6 +94,12 @@ public class DnsHelper {
             case "txt":
                 rtype = Type.TXT;
                 break;
+            case "a":
+                rtype = Type.A;
+                break;
+            case "aaaa":
+                rtype = Type.AAAA;
+                break;
             default:
                 throw new IllegalArgumentException(type);
         }
@@ -142,8 +150,7 @@ public class DnsHelper {
                                     @Override
                                     public void onError(@NonNull DnsResolver.DnsException e) {
                                         try {
-                                            Log.w(e);
-                                            ex = new IOException(e.getMessage());
+                                            ex = new IOException(e.getMessage(), e);
                                         } finally {
                                             sem.release();
                                         }
@@ -157,14 +164,14 @@ public class DnsHelper {
                         }
 
                         if (ex == null) {
-                            //ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+                            //ConnectivityManager cm = getSystemService(context, ConnectivityManager.class);
                             //Network active = (cm == null ? null : cm.getActiveNetwork());
                             //LinkProperties props = (active == null ? null : cm.getLinkProperties(active));
                             //Log.i("DNS private=" + (props == null ? null : props.isPrivateDnsActive()));
                             Log.i("DNS answer=" + result.toString() + " flags=" + result.getHeader().printFlags());
                             return result;
                         } else {
-                            Log.w(ex);
+                            Log.i(ex);
                             throw ex;
                         }
                     }
@@ -199,7 +206,16 @@ public class DnsHelper {
                     } else if (record instanceof TXTRecord) {
                         TXTRecord txt = (TXTRecord) record;
                         for (Object content : txt.getStrings())
-                            result.add(new DnsRecord(content.toString(), 0));
+                            if (result.size() > 0)
+                                result.get(0).name += content.toString();
+                            else
+                                result.add(new DnsRecord(content.toString(), 0));
+                    } else if (record instanceof ARecord) {
+                        ARecord a = (ARecord) record;
+                        result.add(new DnsRecord(a.getAddress().getHostAddress()));
+                    } else if (record instanceof AAAARecord) {
+                        AAAARecord aaaa = (AAAARecord) record;
+                        result.add(new DnsRecord(aaaa.getAddress().getHostAddress()));
                     } else
                         throw new IllegalArgumentException(record.getClass().getName());
                 }
@@ -212,7 +228,7 @@ public class DnsHelper {
     }
 
     private static String getDnsServer(Context context) {
-        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        ConnectivityManager cm = Helper.getSystemService(context, ConnectivityManager.class);
         if (cm == null)
             return DEFAULT_DNS;
 

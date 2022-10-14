@@ -22,6 +22,7 @@ package eu.faircode.email;
 import static android.content.res.Configuration.ORIENTATION_PORTRAIT;
 import static androidx.drawerlayout.widget.DrawerLayout.LOCK_MODE_LOCKED_OPEN;
 import static androidx.drawerlayout.widget.DrawerLayout.LOCK_MODE_UNLOCKED;
+import static androidx.recyclerview.widget.RecyclerView.NO_POSITION;
 
 import android.annotation.SuppressLint;
 import android.app.Dialog;
@@ -34,6 +35,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
@@ -49,8 +51,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBarDrawerToggle;
@@ -58,17 +62,24 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.constraintlayout.widget.Group;
 import androidx.core.app.NotificationCompat;
+import androidx.core.util.Consumer;
 import androidx.core.widget.NestedScrollView;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.Observer;
+import androidx.lifecycle.OnLifecycleEvent;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.window.java.layout.WindowInfoTrackerCallbackAdapter;
+import androidx.window.layout.DisplayFeature;
+import androidx.window.layout.WindowInfoTracker;
+import androidx.window.layout.WindowLayoutInfo;
 
 import com.google.android.material.snackbar.Snackbar;
 
@@ -87,6 +98,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.Callable;
 
 import javax.net.ssl.HttpsURLConnection;
 
@@ -97,6 +109,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
     private boolean nav_options;
     private int colorDrawerScrim;
 
+    private WindowInfoTrackerCallbackAdapter infoTracker;
     private int layoutId;
     private View view;
 
@@ -170,6 +183,9 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
     static final long UPDATE_DAILY = (BuildConfig.BETA_RELEASE ? 4 : 12) * 3600 * 1000L; // milliseconds
     static final long UPDATE_WEEKLY = 7 * 24 * 3600 * 1000L; // milliseconds
 
+    private static final int REQUEST_RULES_ACCOUNT = 2001;
+    private static final int REQUEST_RULES_FOLDER = 2002;
+
     @Override
     @SuppressLint("MissingSuperCall")
     protected void onCreate(Bundle savedInstanceState) {
@@ -209,6 +225,8 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         if (nav_expanded && nav_pinned && !canExpandAndPin())
             nav_pinned = false;
 
+        infoTracker = new WindowInfoTrackerCallbackAdapter(WindowInfoTracker.getOrCreate(this));
+
         Configuration config = getResources().getConfiguration();
         boolean portrait2 = prefs.getBoolean("portrait2", false);
         boolean portrait2c = prefs.getBoolean("portrait2c", false);
@@ -220,6 +238,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                 " portrait rows=" + portrait2 + " cols=" + portrait2c + " min=" + portrait_min_size +
                 " landscape cols=" + landscape + " min=" + landscape);
         boolean duo = Helper.isSurfaceDuo();
+        boolean nav_categories = prefs.getBoolean("nav_categories", false);
 
         // 1=small, 2=normal, 3=large, 4=xlarge
         if (layout > 0)
@@ -267,6 +286,12 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         }
 
         owner = new TwoStateOwner(this, "drawer");
+        owner.getLifecycle().addObserver(new LifecycleObserver() {
+            @OnLifecycleEvent(Lifecycle.Event.ON_ANY)
+            public void onStateChanged() {
+                Log.i("Drawer state=" + owner.getLifecycle().getCurrentState());
+            }
+        });
         drawerLayout = findViewById(R.id.drawer_layout);
 
         final ViewGroup childContent = (ViewGroup) drawerLayout.getChildAt(0);
@@ -274,6 +299,9 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, R.string.app_name, R.string.app_name) {
             public void onDrawerClosed(View view) {
                 Log.i("Drawer closed");
+                if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+                    return;
+
                 owner.stop();
 
                 drawerLayout.setDrawerLockMode(LOCK_MODE_UNLOCKED);
@@ -286,6 +314,9 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                 super.onDrawerOpened(drawerView);
 
                 Log.i("Drawer opened");
+                if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+                    return;
+
                 owner.start();
 
                 if (nav_pinned) {
@@ -298,6 +329,11 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
             @Override
             public void onDrawerSlide(View drawerView, float slideOffset) {
                 super.onDrawerSlide(drawerView, slideOffset);
+
+                if (BuildConfig.DEBUG)
+                    Log.i("Drawer slide=" + slideOffset);
+                if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+                    return;
 
                 if (slideOffset > 0)
                     owner.start();
@@ -451,9 +487,77 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         vSeparatorOptions.setVisibility(nav_options ? View.VISIBLE : View.GONE);
 
         // Accounts
-        rvAccount.setLayoutManager(new LinearLayoutManager(this));
+        LinearLayoutManager llmAccounts = new LinearLayoutManager(this);
+        rvAccount.setLayoutManager(llmAccounts);
         adapterNavAccount = new AdapterNavAccountFolder(this, this);
         rvAccount.setAdapter(adapterNavAccount);
+
+        if (nav_categories) {
+            LayoutInflater inflater = LayoutInflater.from(this);
+            DividerItemDecoration categoryDecorator = new DividerItemDecoration(this, llmAccounts.getOrientation()) {
+                @Override
+                public void onDraw(@NonNull Canvas canvas, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+                    int count = parent.getChildCount();
+                    for (int i = 0; i < count; i++) {
+                        View view = parent.getChildAt(i);
+                        int pos = parent.getChildAdapterPosition(view);
+
+                        View header = getView(view, parent, pos);
+                        if (header != null) {
+                            canvas.save();
+                            canvas.translate(0, parent.getChildAt(i).getTop() - header.getMeasuredHeight());
+                            header.draw(canvas);
+                            canvas.restore();
+                        }
+                    }
+                }
+
+                @Override
+                public void getItemOffsets(Rect outRect, View view, RecyclerView parent, RecyclerView.State state) {
+                    int pos = parent.getChildAdapterPosition(view);
+                    View header = getView(view, parent, pos);
+                    if (header == null)
+                        outRect.setEmpty();
+                    else
+                        outRect.top = header.getMeasuredHeight();
+                }
+
+                private View getView(View view, RecyclerView parent, int pos) {
+                    if (pos == NO_POSITION)
+                        return null;
+
+                    if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+                        return null;
+
+                    TupleAccountFolder prev = adapterNavAccount.getItemAtPosition(pos - 1);
+                    TupleAccountFolder account = adapterNavAccount.getItemAtPosition(pos);
+                    if (pos > 0 && prev == null)
+                        return null;
+                    if (account == null)
+                        return null;
+
+                    if (pos > 0) {
+                        if (Objects.equals(prev.category, account.category))
+                            return null;
+                    } else {
+                        if (account.category == null)
+                            return null;
+                    }
+
+                    View header = inflater.inflate(R.layout.item_nav_group, parent, false);
+                    TextView tvCategory = header.findViewById(R.id.tvCategory);
+
+                    tvCategory.setText(account.category);
+
+                    header.measure(View.MeasureSpec.makeMeasureSpec(parent.getWidth(), View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                    header.layout(0, 0, header.getMeasuredWidth(), header.getMeasuredHeight());
+
+                    return header;
+                }
+            };
+            rvAccount.addItemDecoration(categoryDecorator);
+        }
 
         boolean nav_account = prefs.getBoolean("nav_account", true);
         boolean nav_folder = prefs.getBoolean("nav_folder", true);
@@ -552,13 +656,13 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         });
 
         // Extra menus
-        LinearLayoutManager llm = new LinearLayoutManager(this);
-        rvMenuExtra.setLayoutManager(llm);
+        LinearLayoutManager llmMenuExtra = new LinearLayoutManager(this);
+        rvMenuExtra.setLayoutManager(llmMenuExtra);
         adapterNavMenuExtra = new AdapterNavMenu(this, this);
         rvMenuExtra.setAdapter(adapterNavMenuExtra);
 
         final Drawable d = getDrawable(R.drawable.divider);
-        DividerItemDecoration itemDecorator = new DividerItemDecoration(this, llm.getOrientation()) {
+        DividerItemDecoration itemDecorator = new DividerItemDecoration(this, llmMenuExtra.getOrientation()) {
             @Override
             public void getItemOffsets(Rect outRect, View view, RecyclerView parent, RecyclerView.State state) {
                 int pos = parent.getChildAdapterPosition(view);
@@ -591,6 +695,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         });
 
         getSupportFragmentManager().addOnBackStackChangedListener(this);
+        getOnBackPressedDispatcher().addCallback(this, backPressedCallback);
 
         // Initialize
 
@@ -612,6 +717,26 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
 
         Shortcuts.update(this, this);
     }
+
+    public boolean isSplit() {
+        return (layoutId == R.layout.activity_view_portrait_split ||
+                layoutId == R.layout.activity_view_landscape_split);
+    }
+
+    @Override
+    public void onBackPressedFragment() {
+        backPressedCallback.handleOnBackPressed();
+    }
+
+    private OnBackPressedCallback backPressedCallback = new OnBackPressedCallback(true) {
+        @Override
+        public void handleOnBackPressed() {
+            if (Helper.isKeyboardVisible(view))
+                Helper.hideKeyboard(view);
+            else
+                onExit();
+        }
+    };
 
     private void init() {
         Bundle args = new Bundle();
@@ -653,7 +778,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         outState.putParcelable("fair:intent", getIntent());
-        outState.putBoolean("fair:toggle", drawerToggle.isDrawerIndicatorEnabled());
+        outState.putBoolean("fair:toggle", drawerToggle == null || drawerToggle.isDrawerIndicatorEnabled());
         outState.putBoolean("fair:searching", searching);
         super.onSaveInstanceState(outState);
     }
@@ -695,6 +820,15 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
             }
         }));
 
+        menus.add(new NavMenuItem(R.drawable.twotone_filter_alt_24, R.string.menu_rules, new Runnable() {
+            @Override
+            public void run() {
+                if (!drawerLayout.isLocked(drawerContainer))
+                    drawerLayout.closeDrawer(drawerContainer);
+                onMenuRulesAccount();
+            }
+        }));
+
         menus.add(new NavMenuItem(R.drawable.twotone_settings_24, R.string.menu_setup, new Runnable() {
             @Override
             public void run() {
@@ -702,9 +836,9 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                     drawerLayout.closeDrawer(drawerContainer);
                 onMenuSetup();
             }
-        }, new Runnable() {
+        }, new Callable<Boolean>() {
             @Override
-            public void run() {
+            public Boolean call() {
                 if (BuildConfig.DEBUG)
                     try {
                         DnsBlockList.clearCache();
@@ -713,6 +847,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                     } catch (Throwable ex) {
                         Log.unexpectedError(getSupportFragmentManager(), ex);
                     }
+                return BuildConfig.DEBUG;
             }
         }));
 
@@ -738,12 +873,13 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                     drawerLayout.closeDrawer(drawerContainer);
                 onMenuFAQ();
             }
-        }, new Runnable() {
+        }, new Callable<Boolean>() {
             @Override
-            public void run() {
+            public Boolean call() {
                 if (!drawerLayout.isLocked(drawerContainer))
                     drawerLayout.closeDrawer(drawerContainer);
                 onDebugInfo();
+                return true;
             }
         }).setExternal(true));
 
@@ -753,6 +889,12 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                 if (!drawerLayout.isLocked(drawerContainer))
                     drawerLayout.closeDrawer(drawerContainer);
                 onMenuIssue();
+            }
+        }, new Callable<Boolean>() {
+            @Override
+            public Boolean call() {
+                CoalMine.check();
+                return BuildConfig.DEBUG;
             }
         }).setExternal(true));
 
@@ -789,14 +931,16 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
             public void run() {
                 onMenuAbout();
             }
-        }, new Runnable() {
+        }, new Callable<Boolean>() {
             @Override
-            public void run() {
-                if (!Helper.isPlayStoreInstall()) {
+            public Boolean call() {
+                boolean play = Helper.isPlayStoreInstall();
+                if (!play) {
                     if (!drawerLayout.isLocked(drawerContainer))
                         drawerLayout.closeDrawer(drawerContainer);
                     checkUpdate(true);
                 }
+                return !play;
             }
         }).setSeparated().setSubtitle(BuildConfig.VERSION_NAME));
 
@@ -870,11 +1014,28 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         });
 
         db.operation().liveStats().observe(owner, new Observer<TupleOperationStats>() {
+            private Boolean lastWarning = null;
+            private Integer lastCount = null;
+
             @Override
             public void onChanged(TupleOperationStats stats) {
-                navOperations.setWarning(stats != null && stats.errors != null && stats.errors > 0);
-                navOperations.setCount(stats == null ? 0 : stats.pending);
-                adapterNavMenu.notifyDataSetChanged();
+                boolean warning = (stats != null && stats.errors != null && stats.errors > 0);
+                int count = (stats == null ? 0 : stats.pending);
+
+                if (Objects.equals(lastWarning, warning) && Objects.equals(lastCount, count))
+                    return;
+
+                lastWarning = warning;
+                lastCount = count;
+
+                navOperations.setWarning(warning);
+                navOperations.setCount(count);
+
+                int pos = adapterNavMenu.getPosition(navOperations);
+                if (pos < 0)
+                    adapterNavMenu.notifyDataSetChanged();
+                else
+                    adapterNavMenu.notifyItemChanged(pos);
             }
         });
 
@@ -892,8 +1053,21 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        infoTracker.addWindowLayoutInfoListener(this, Runnable::run, layoutStateChangeCallback);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        infoTracker.removeWindowLayoutInfoListener(layoutStateChangeCallback);
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+        ServiceSynchronize.state(this, true);
 
         LocalBroadcastManager lbm = LocalBroadcastManager.getInstance(this);
         IntentFilter iff = new IntentFilter();
@@ -909,7 +1083,10 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         iff.addAction(ACTION_EDIT_RULE);
         lbm.registerReceiver(receiver, iff);
 
-        ServiceSynchronize.state(this, true);
+        boolean open = drawerLayout.isDrawerOpen(drawerContainer);
+        Log.i("Drawer resume open=" + open);
+        if (open)
+            owner.start();
 
         checkUpdate(false);
         checkIntent();
@@ -917,12 +1094,14 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
 
     @Override
     protected void onPause() {
+        ServiceSynchronize.state(this, false);
         super.onPause();
 
         LocalBroadcastManager lbm = LocalBroadcastManager.getInstance(this);
         lbm.unregisterReceiver(receiver);
 
-        ServiceSynchronize.state(this, false);
+        Log.i("Drawer pause");
+        owner.stop();
     }
 
     @Override
@@ -930,6 +1109,27 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         LocalBroadcastManager lbm = LocalBroadcastManager.getInstance(this);
         lbm.unregisterReceiver(creceiver);
         super.onDestroy();
+        infoTracker = null;
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        try {
+            switch (requestCode) {
+                case REQUEST_RULES_ACCOUNT:
+                    if (resultCode == RESULT_OK && data != null)
+                        onMenuRulesFolder(data.getBundleExtra("args"));
+                    break;
+                case REQUEST_RULES_FOLDER:
+                    if (resultCode == RESULT_OK && data != null)
+                        onMenuRules(data.getBundleExtra("args"));
+                    break;
+            }
+        } catch (Throwable ex) {
+            Log.e(ex);
+        }
     }
 
     @Override
@@ -1064,8 +1264,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         return (getDrawerWidthPinned() >= dp200);
     }
 
-    @Override
-    public void onBackPressed() {
+    private void onExit() {
         int count = getSupportFragmentManager().getBackStackEntryCount();
         if (!nav_pinned &&
                 drawerLayout.isDrawerOpen(drawerContainer) &&
@@ -1073,15 +1272,15 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
             drawerLayout.closeDrawer(drawerContainer);
         else {
             if (exit || count > 1)
-                super.onBackPressed();
-            else if (!backHandled()) {
+                performBack();
+            else {
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ActivityView.this);
                 boolean double_back = prefs.getBoolean("double_back", false);
                 if (searching || !double_back)
-                    super.onBackPressed();
+                    performBack();
                 else {
                     exit = true;
-                    ToastEx.makeText(this, R.string.app_exit, Toast.LENGTH_SHORT).show();
+                    ToastEx.makeText(ActivityView.this, R.string.app_exit, Toast.LENGTH_SHORT).show();
                     getMainHandler().postDelayed(new Runnable() {
                         @Override
                         public void run() {
@@ -1095,6 +1294,9 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
 
     @Override
     public void onBackStackChanged() {
+        if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+            return;
+
         int count = getSupportFragmentManager().getBackStackEntryCount();
         if (count == 0)
             finish();
@@ -1127,7 +1329,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
     public boolean onOptionsItemSelected(MenuItem item) {
         if (drawerToggle.onOptionsItemSelected(item)) {
             if (nav_pinned)
-                onBackPressed();
+                onExit();
             else {
                 int count = getSupportFragmentManager().getBackStackEntryCount();
                 if (count == 1 && drawerLayout.isLocked(drawerContainer))
@@ -1144,8 +1346,10 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         int undo_timeout = prefs.getInt("undo_timeout", 5000);
 
         if (undo_timeout == 0) {
-            if (move != null)
+            if (move != null) {
                 move.execute(this, args, "undo:move");
+                show.cancel(this);
+            }
         } else
             undo(undo_timeout, title, args, move, show);
     }
@@ -1153,8 +1357,10 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
     private void undo(long undo_timeout, String title, final Bundle args, final SimpleTask move, final SimpleTask show) {
         if (drawerLayout == null || drawerLayout.getChildCount() == 0) {
             Log.e("Undo: drawer missing");
-            if (show != null)
+            if (show != null) {
                 show.execute(this, args, "undo:show");
+                move.cancel(this);
+            }
             return;
         }
 
@@ -1170,8 +1376,10 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
             public void run() {
                 Log.i("Undo timeout");
                 snackbar.dismiss();
-                if (move != null)
+                if (move != null) {
                     move.execute(ActivityView.this, args, "undo:move");
+                    show.cancel(ActivityView.this);
+                }
             }
         };
 
@@ -1181,8 +1389,10 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                 Log.i("Undo cancel");
                 content.removeCallbacks(timeout);
                 snackbar.dismiss();
-                if (show != null)
+                if (show != null) {
                     show.execute(ActivityView.this, args, "undo:show");
+                    move.cancel(ActivityView.this);
+                }
             }
         });
 
@@ -1222,7 +1432,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
             Intent intent = getIntent();
             String action = (intent == null ? null : intent.getAction());
             if (action != null &&
-                    (action.startsWith("thread") || action.equals("widget")))
+                    (action.startsWith("thread") || action.startsWith("widget")))
                 return;
 
             String last = prefs.getString("changelog", null);
@@ -1250,7 +1460,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         new SimpleTask<Long>() {
             @Override
             protected Long onExecute(Context context, Bundle args) throws Throwable {
-                File file = new File(context.getCacheDir(), "crash.log");
+                File file = new File(context.getFilesDir(), "crash.log");
                 if (file.exists()) {
                     StringBuilder sb = new StringBuilder();
                     try {
@@ -1321,7 +1531,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                     urlConnection.setReadTimeout(UPDATE_TIMEOUT);
                     urlConnection.setConnectTimeout(UPDATE_TIMEOUT);
                     urlConnection.setDoOutput(false);
-                    urlConnection.setRequestProperty("User-Agent", WebViewEx.getUserAgent(context));
+                    ConnectionHelper.setUserAgent(context, urlConnection);
                     urlConnection.connect();
 
                     int status = urlConnection.getResponseCode();
@@ -1418,14 +1628,14 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                                 .setVisibility(NotificationCompat.VISIBILITY_SECRET);
 
                 Intent update = new Intent(Intent.ACTION_VIEW, Uri.parse(info.html_url))
-                        .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 PendingIntent piUpdate = PendingIntentCompat.getActivity(
                         ActivityView.this, PI_UPDATE, update, PendingIntent.FLAG_UPDATE_CURRENT);
                 builder.setContentIntent(piUpdate);
 
                 Intent manage = new Intent(ActivityView.this, ActivitySetup.class)
                         .setAction("misc")
-                        .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK)
                         .putExtra("tab", "misc");
                 PendingIntent piManage = PendingIntentCompat.getActivity(
                         ActivityView.this, ActivitySetup.PI_MISC, manage, PendingIntent.FLAG_UPDATE_CURRENT);
@@ -1437,7 +1647,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
 
                 if (!TextUtils.isEmpty(info.download_url)) {
                     Intent download = new Intent(Intent.ACTION_VIEW, Uri.parse(info.download_url))
-                            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     PendingIntent piDownload = PendingIntentCompat.getActivity(
                             ActivityView.this, 0, download, 0);
                     NotificationCompat.Action.Builder actionDownload = new NotificationCompat.Action.Builder(
@@ -1449,9 +1659,10 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
 
                 try {
                     NotificationManager nm =
-                            (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                    nm.notify(NotificationHelper.NOTIFICATION_UPDATE,
-                            builder.build());
+                            Helper.getSystemService(ActivityView.this, NotificationManager.class);
+                    if (NotificationHelper.areNotificationsEnabled(nm))
+                        nm.notify(NotificationHelper.NOTIFICATION_UPDATE,
+                                builder.build());
                 } catch (Throwable ex) {
                     Log.w(ex);
                 }
@@ -1547,7 +1758,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                 intent.putExtra("id", id);
                 onViewThread(intent);
 
-            } else if (action.equals("widget")) {
+            } else if (action.startsWith("widget")) {
                 long account = intent.getLongExtra("widget_account", -1);
                 long folder = intent.getLongExtra("widget_folder", -1);
                 String type = intent.getStringExtra("widget_type");
@@ -1663,6 +1874,59 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
         fragmentTransaction.commit();
     }
 
+    private void onMenuRulesAccount() {
+        new SimpleTask<EntityAccount>() {
+            @Override
+            protected EntityAccount onExecute(Context context, Bundle args) {
+                DB db = DB.getInstance(context);
+
+                List<EntityAccount> accounts = db.account().getSynchronizingAccounts(null);
+                if (accounts != null && accounts.size() == 1)
+                    return accounts.get(0);
+
+                return null;
+            }
+
+            @Override
+            protected void onExecuted(Bundle args, EntityAccount account) {
+                if (account == null) {
+                    FragmentDialogSelectAccount fragment = new FragmentDialogSelectAccount();
+                    fragment.setArguments(new Bundle());
+                    fragment.setTargetActivity(ActivityView.this, REQUEST_RULES_ACCOUNT);
+                    fragment.show(getSupportFragmentManager(), "rules:account");
+                } else {
+                    args.putLong("account", account.id);
+                    args.putInt("protocol", account.protocol);
+                    args.putString("name", account.name);
+                    onMenuRulesFolder(args);
+                }
+            }
+
+            @Override
+            protected void onException(Bundle args, Throwable ex) {
+                Log.unexpectedError(getSupportFragmentManager(), ex);
+            }
+        }.execute(this, new Bundle(), "rules:account");
+    }
+
+    private void onMenuRulesFolder(Bundle args) {
+        args.putString("title", getString(R.string.title_edit_rules));
+        args.putLongArray("disabled", new long[0]);
+
+        FragmentDialogFolder fragment = new FragmentDialogFolder();
+        fragment.setArguments(args);
+        fragment.setTargetActivity(this, REQUEST_RULES_FOLDER);
+        fragment.show(getSupportFragmentManager(), "rules:folder");
+    }
+
+    private void onMenuRules(Bundle args) {
+        FragmentRules fragment = new FragmentRules();
+        fragment.setArguments(args);
+        FragmentTransaction fragmentTransaction = getSupportFragmentManager().beginTransaction();
+        fragmentTransaction.replace(R.id.content_frame, fragment).addToBackStack("rules");
+        fragmentTransaction.commit();
+    }
+
     private void onMenuSetup() {
         startActivity(new Intent(ActivityView.this, ActivitySetup.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
@@ -1690,7 +1954,7 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
     }
 
     private void onMenuIssue() {
-        startActivity(Helper.getIntentIssue(this));
+        startActivity(Helper.getIntentIssue(this, "View:issue"));
     }
 
     private void onMenuPrivacy() {
@@ -2011,4 +2275,14 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                     .create();
         }
     }
+
+    private final Consumer<WindowLayoutInfo> layoutStateChangeCallback = new Consumer<WindowLayoutInfo>() {
+        @Override
+        public void accept(WindowLayoutInfo info) {
+            List<DisplayFeature> features = info.getDisplayFeatures();
+            Log.i("Display features=" + features.size());
+            for (DisplayFeature feature : features)
+                EntityLog.log(ActivityView.this, "Display feature bounds=" + feature.getBounds());
+        }
+    };
 }

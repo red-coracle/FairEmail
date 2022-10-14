@@ -35,7 +35,6 @@ import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.text.style.ImageSpan;
-import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -46,16 +45,19 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.snackbar.Snackbar;
 
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 
+import java.io.FileNotFoundException;
+import java.io.InputStream;
 import java.util.Objects;
 
 public class ActivitySignature extends ActivityBase {
@@ -70,6 +72,7 @@ public class ActivitySignature extends ActivityBase {
     private boolean dirty = false;
 
     private static final int REQUEST_IMAGE = 1;
+    private static final int REQUEST_FILE = 2;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -158,14 +161,14 @@ public class ActivitySignature extends ActivityBase {
             }
         });
 
-        addKeyPressedListener(new IKeyPressedListener() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
-            public boolean onKeyPressed(KeyEvent event) {
-                return false;
-            }
+            public void handleOnBackPressed() {
+                if (Helper.isKeyboardVisible(view)) {
+                    Helper.hideKeyboard(view);
+                    return;
+                }
 
-            @Override
-            public boolean onBackPressed() {
                 String prev = getIntent().getStringExtra("html");
                 String current = getHtml();
                 boolean dirty = !Objects.equals(prev, current) &&
@@ -179,7 +182,7 @@ public class ActivitySignature extends ActivityBase {
                                 @Override
                                 public void onClick(DialogInterface dialog, int which) {
                                     save();
-                                    finish();
+                                    performBack();
                                 }
                             })
                             .setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
@@ -190,11 +193,9 @@ public class ActivitySignature extends ActivityBase {
                             })
                             .show();
                 else
-                    finish();
-
-                return true;
+                    performBack();
             }
-        }, this);
+        });
 
         // Initialize
         FragmentDialogTheme.setBackground(this, view, true);
@@ -242,12 +243,24 @@ public class ActivitySignature extends ActivityBase {
             item.setChecked(!item.isChecked());
             html(item.isChecked());
             return true;
+        } else if (itemId == R.id.menu_import_file) {
+            onMenuSelectFile();
+            return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
     private void onMenuHelp() {
         Helper.viewFAQ(this, 57);
+    }
+
+    private void onMenuSelectFile() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.setType("text/*");
+        Helper.openAdvanced(intent);
+        startActivityForResult(intent, REQUEST_FILE);
     }
 
     @Override
@@ -259,6 +272,10 @@ public class ActivitySignature extends ActivityBase {
                 case REQUEST_IMAGE:
                     if (resultCode == RESULT_OK && data != null)
                         onImageSelected(data.getData());
+                    break;
+                case REQUEST_FILE:
+                    if (resultCode == RESULT_OK && data != null)
+                        onFileSelected(data.getData());
                     break;
             }
         } catch (Throwable ex) {
@@ -273,26 +290,32 @@ public class ActivitySignature extends ActivityBase {
         else if (etText.isRaw())
             etText.setText(html);
         else
-            etText.setText(HtmlHelper.fromHtml(html, new Html.ImageGetter() {
+            etText.setText(HtmlHelper.fromHtml(html, new HtmlHelper.ImageGetterEx() {
                 @Override
-                public Drawable getDrawable(String source) {
-                    if (source != null && source.startsWith("cid:"))
-                        source = null;
-                    return ImageHelper.decodeImage(ActivitySignature.this, -1, source, true, 0, 1.0f, etText);
+                public Drawable getDrawable(Element element) {
+                    String source = element.attr("src");
+                    if (source.startsWith("cid:"))
+                        element.attr("src", "cid:");
+                    return ImageHelper.decodeImage(ActivitySignature.this,
+                            -1, element, true, 0, 1.0f, etText);
                 }
             }, null, this));
         loaded = true;
     }
 
     private void delete() {
-        Intent result = new Intent();
+        Intent result = getIntent();
+        if (result == null)
+            result = new Intent();
         result.putExtra("html", (String) null);
         setResult(RESULT_OK, result);
         finish();
     }
 
     private void save() {
-        Intent result = new Intent();
+        Intent result = getIntent();
+        if (result == null)
+            result = new Intent();
         result.putExtra("html", getHtml());
         setResult(RESULT_OK, result);
         finish();
@@ -341,7 +364,7 @@ public class ActivitySignature extends ActivityBase {
             final int start = etText.getSelectionStart();
             final int end = etText.getSelectionEnd();
 
-            ClipboardManager cbm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            ClipboardManager cbm = Helper.getSystemService(this, ClipboardManager.class);
             if (cbm != null && cbm.hasPrimaryClip()) {
                 String link = cbm.getPrimaryClip().getItemAt(0).coerceToText(this).toString();
                 uri = Uri.parse(link);
@@ -376,6 +399,8 @@ public class ActivitySignature extends ActivityBase {
 
     private void onImageSelected(Uri uri) {
         try {
+            NoStreamException.check(uri, this);
+
             getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
             int start = etText.getSelectionStart();
@@ -406,18 +431,42 @@ public class ActivitySignature extends ActivityBase {
                             })
                             .show();
             }
-        } catch (SecurityException ex) {
-            Snackbar sb = Snackbar.make(view, R.string.title_no_stream, Snackbar.LENGTH_INDEFINITE)
-                    .setGestureInsetBottomIgnored(true);
-            sb.setAction(R.string.title_info, new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    Helper.viewFAQ(ActivitySignature.this, 49);
-                }
-            });
-            sb.show();
+        } catch (NoStreamException ex) {
+            ex.report(this);
         } catch (Throwable ex) {
             Log.unexpectedError(getSupportFragmentManager(), ex);
         }
+    }
+
+    private void onFileSelected(Uri uri) {
+        Bundle args = new Bundle();
+        args.putParcelable("uri", uri);
+
+        new SimpleTask<String>() {
+            @Override
+            protected String onExecute(Context context, Bundle args) throws Throwable {
+                try (InputStream is = getContentResolver().openInputStream(uri)) {
+                    if (is == null)
+                        throw new FileNotFoundException(uri.toString());
+                    return Helper.readStream(is);
+                }
+            }
+
+            @Override
+            protected void onExecuted(Bundle args, String text) {
+                int start = etText.getSelectionStart();
+                if (start < 0)
+                    start = 0;
+                etText.getText().insert(start, text);
+            }
+
+            @Override
+            protected void onException(Bundle args, Throwable ex) {
+                if (ex instanceof NoStreamException)
+                    ((NoStreamException) ex).report(ActivitySignature.this);
+                else
+                    Log.unexpectedError(getSupportFragmentManager(), ex);
+            }
+        }.execute(this, args, "signature:file");
     }
 }

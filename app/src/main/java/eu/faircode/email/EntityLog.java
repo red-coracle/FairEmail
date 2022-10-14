@@ -64,7 +64,7 @@ public class EntityLog {
     @NonNull
     public String data;
 
-    enum Type {General, Statistics, Scheduling, Network, Account, Protocol, Classification, Notification, Rules}
+    enum Type {General, Statistics, Scheduling, Network, Account, Protocol, Classification, Notification, Rules, Debug}
 
     private static final ExecutorService executor =
             Helper.getBackgroundExecutor(1, "log");
@@ -111,6 +111,9 @@ public class EntityLog {
 
         if (context == null)
             return;
+        if (type == Type.Debug &&
+                !(BuildConfig.DEBUG || BuildConfig.TEST_RELEASE))
+            return;
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         boolean main_log = prefs.getBoolean("main_log", true);
@@ -126,6 +129,7 @@ public class EntityLog {
         entry.data = data;
 
         final DB db = DB.getInstance(context);
+        final Context acontext = context.getApplicationContext();
 
         executor.submit(new Runnable() {
             @Override
@@ -161,17 +165,18 @@ public class EntityLog {
                 long now = new Date().getTime();
                 if (last_cleanup == null || last_cleanup + LOG_CLEANUP_INTERVAL < now) {
                     last_cleanup = now;
-                    cleanup(context, now - LOG_KEEP_DURATION);
+                    cleanup(acontext, now - LOG_KEEP_DURATION);
                 }
             }
         });
     }
 
     static void clear(final Context context) {
+        final Context acontext = context.getApplicationContext();
         executor.submit(new Runnable() {
             @Override
             public void run() {
-                cleanup(context, new Date().getTime());
+                cleanup(acontext, new Date().getTime());
             }
         });
     }
@@ -220,6 +225,8 @@ public class EntityLog {
                 return ContextCompat.getColor(context, R.color.solarizedBlue);
             case Rules:
                 return ContextCompat.getColor(context, R.color.solarizedCyan);
+            case Debug:
+                return Helper.resolveColor(context, R.attr.colorWarning);
             default:
                 return null;
         }

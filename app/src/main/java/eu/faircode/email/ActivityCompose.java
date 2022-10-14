@@ -86,6 +86,9 @@ public class ActivityCompose extends ActivityBase implements FragmentManager.OnB
                     }
             }
 
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+            prefs.edit().remove("last_composing").apply();
+
             finishAndRemoveTask();
         }
     }
@@ -294,6 +297,9 @@ public class ActivityCompose extends ActivityBase implements FragmentManager.OnB
     static Long undoSend(long id, Context context) {
         DB db = DB.getInstance(context);
 
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        boolean save_drafts = prefs.getBoolean("save_drafts", true);
+
         // Cancel send
         EntityOperation operation = db.operation().getOperation(id, EntityOperation.SEND);
         if (operation != null)
@@ -336,7 +342,10 @@ public class ActivityCompose extends ActivityBase implements FragmentManager.OnB
             for (EntityAttachment attachment : attachments)
                 db.attachment().setMessage(attachment.id, message.id);
 
-            EntityOperation.queue(context, message, EntityOperation.ADD);
+            if (save_drafts &&
+                    (message.ui_encrypt == null ||
+                            EntityMessage.ENCRYPT_NONE.equals(message.ui_encrypt)))
+                EntityOperation.queue(context, message, EntityOperation.ADD);
 
             // Delete from outbox
             db.message().deleteMessage(id); // will delete operation too
@@ -348,8 +357,7 @@ public class ActivityCompose extends ActivityBase implements FragmentManager.OnB
 
         ServiceSynchronize.eval(context, "outbox/drafts");
 
-        NotificationManager nm =
-                (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationManager nm = Helper.getSystemService(context, NotificationManager.class);
         nm.cancel("send:" + id, NotificationHelper.NOTIFICATION_TAGGED);
 
         return message.id;

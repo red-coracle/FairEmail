@@ -45,7 +45,6 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.pm.ShortcutInfoCompat;
-import androidx.core.content.pm.ShortcutManagerCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleObserver;
@@ -58,6 +57,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.io.InputStream;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
@@ -72,6 +72,7 @@ public class AdapterContact extends RecyclerView.Adapter<AdapterContact.ViewHold
     private int textColorSecondary;
 
     private String search = null;
+    private Long account;
     private List<Integer> types = new ArrayList<>();
 
     private List<TupleContactEx> all = new ArrayList<>();
@@ -130,7 +131,7 @@ public class AdapterContact extends RecyclerView.Adapter<AdapterContact.ViewHold
                 ivType.setImageResource(R.drawable.twotone_report_24);
                 ivType.setContentDescription(context.getString(R.string.title_legend_junk));
             } else if (contact.type == EntityContact.TYPE_NO_JUNK) {
-                ivType.setImageResource(R.drawable.twotone_report_off_24);
+                ivType.setImageResource(R.drawable.twotone_person_off_24);
                 ivType.setContentDescription(context.getString(R.string.title_no_junk));
             } else {
                 ivType.setImageDrawable(null);
@@ -153,8 +154,8 @@ public class AdapterContact extends RecyclerView.Adapter<AdapterContact.ViewHold
                 }
             }
 
-            tvName.setText(contact.name == null ? "-" : contact.name);
-            tvEmail.setText(contact.accountName + "/" + contact.email);
+            tvName.setText(contact.name == null ? "-" : contact.name + (contact.group == null ? "" : "/" + contact.group));
+            tvEmail.setText(contact.email + "/" + contact.accountName);
             tvTimes.setText(NF.format(contact.times_contacted));
             tvLast.setText(contact.last_contacted == null ? null
                     : Helper.getRelativeTimeSpanString(context, contact.last_contacted));
@@ -234,12 +235,17 @@ public class AdapterContact extends RecyclerView.Adapter<AdapterContact.ViewHold
             ss.setSpan(new RelativeSizeSpan(0.9f), 0, ss.length(), 0);
             popupMenu.getMenu().add(Menu.NONE, 0, order++, ss).setEnabled(false);
 
+            if (!TextUtils.isEmpty(contact.identityEmail)) {
+                String via = context.getString(R.string.title_via, contact.identityEmail);
+                popupMenu.getMenu().add(Menu.NONE, 0, order++, via).setEnabled(false);
+            }
+
             if (contact.state != EntityContact.STATE_IGNORE)
                 popupMenu.getMenu().add(Menu.NONE, R.string.title_advanced_never_favorite, order++, R.string.title_advanced_never_favorite);
             popupMenu.getMenu().add(Menu.NONE, R.string.title_share, order++, R.string.title_share); // should be system whitelisted
             if (Shortcuts.can(context))
                 popupMenu.getMenu().add(Menu.NONE, R.string.title_pin, order++, R.string.title_pin);
-            popupMenu.getMenu().add(Menu.NONE, R.string.title_advanced_edit_name, order++, R.string.title_advanced_edit_name);
+            popupMenu.getMenu().add(Menu.NONE, R.string.title_edit_contact, order++, R.string.title_edit_contact);
             popupMenu.getMenu().add(Menu.NONE, R.string.title_search, order++, R.string.title_search);
             popupMenu.getMenu().add(Menu.NONE, R.string.title_delete, order++, R.string.title_delete);
 
@@ -256,7 +262,7 @@ public class AdapterContact extends RecyclerView.Adapter<AdapterContact.ViewHold
                     } else if (itemId == R.string.title_pin) {
                         onActionPin();
                         return true;
-                    } else if (itemId == R.string.title_advanced_edit_name) {
+                    } else if (itemId == R.string.title_edit_contact) {
                         onActionEdit();
                         return true;
                     } else if (itemId == R.string.title_search) {
@@ -306,23 +312,28 @@ public class AdapterContact extends RecyclerView.Adapter<AdapterContact.ViewHold
 
                 private void onActionPin() {
                     ShortcutInfoCompat.Builder builder = Shortcuts.getShortcut(context, contact);
-                    ShortcutManagerCompat.requestPinShortcut(context, builder.build(), null);
+                    Shortcuts.requestPinShortcut(context, builder.build());
                 }
 
                 private void onActionEdit() {
                     Bundle args = new Bundle();
                     args.putLong("id", contact.id);
+                    args.putLong("account", contact.account);
+                    args.putInt("type", contact.type);
+                    args.putString("email", contact.email);
                     args.putString("name", contact.name);
+                    args.putString("group", contact.group);
 
-                    FragmentDialogEditName fragment = new FragmentDialogEditName();
+                    FragmentContacts.FragmentDialogEditContact fragment = new FragmentContacts.FragmentDialogEditContact();
                     fragment.setArguments(args);
-                    fragment.setTargetFragment(parentFragment, FragmentContacts.REQUEST_EDIT_NAME);
-                    fragment.show(parentFragment.getParentFragmentManager(), "contact:name");
+                    fragment.setTargetFragment(parentFragment, FragmentContacts.REQUEST_EDIT_CONTACT);
+                    fragment.show(parentFragment.getParentFragmentManager(), "contact:edit");
                 }
 
                 private void onActionSearch() {
-                    Intent search = new Intent(context, ActivitySearch.class);
-                    search.putExtra(Intent.EXTRA_PROCESS_TEXT, contact.email);
+                    Intent search = new Intent(context, ActivityView.class)
+                            .putExtra(Intent.EXTRA_PROCESS_TEXT, contact.email)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                     context.startActivity(search);
                 }
 
@@ -385,20 +396,23 @@ public class AdapterContact extends RecyclerView.Adapter<AdapterContact.ViewHold
 
     public void set(@NonNull List<TupleContactEx> contacts) {
         Log.i("Set contacts=" + contacts.size() +
-                " search=" + search + " types=" + types.size());
+                " search=" + search +
+                " account=" + account +
+                " types=" + types.size());
 
         all = contacts;
 
         new SimpleTask<List<TupleContactEx>>() {
             @Override
-            protected List<TupleContactEx> onExecute(Context context, Bundle args) throws Throwable {
+            protected List<TupleContactEx> onExecute(Context context, Bundle args) {
                 List<TupleContactEx> filtered;
-                if (types.size() == 0)
+                if (account == null && types.size() == 0)
                     filtered = contacts;
                 else {
                     filtered = new ArrayList<>();
                     for (TupleContactEx contact : contacts)
-                        if (types.contains(contact.type))
+                        if ((account == null || contact.account.equals(account)) &&
+                                (types.size() == 0 || types.contains(contact.type)))
                             filtered.add(contact);
                 }
 
@@ -444,7 +458,12 @@ public class AdapterContact extends RecyclerView.Adapter<AdapterContact.ViewHold
                         Log.d("Changed @" + position + " #" + count);
                     }
                 });
-                diff.dispatchUpdatesTo(AdapterContact.this);
+
+                try {
+                    diff.dispatchUpdatesTo(AdapterContact.this);
+                } catch (Throwable ex) {
+                    Log.e(ex);
+                }
             }
 
             @Override
@@ -460,8 +479,11 @@ public class AdapterContact extends RecyclerView.Adapter<AdapterContact.ViewHold
         set(all);
     }
 
-    public void filter(List<Integer> types) {
-        this.types = types;
+    public void filter(Long account, boolean junk) {
+        this.account = account;
+        this.types = junk
+                ? Arrays.asList(EntityContact.TYPE_JUNK, EntityContact.TYPE_NO_JUNK)
+                : Arrays.asList(EntityContact.TYPE_TO, EntityContact.TYPE_FROM);
         set(all);
     }
 

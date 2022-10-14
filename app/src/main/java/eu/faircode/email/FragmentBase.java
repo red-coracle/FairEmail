@@ -29,6 +29,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.IntentSender;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Rect;
@@ -38,6 +39,9 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
@@ -45,6 +49,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
@@ -56,7 +61,10 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentResultListener;
 import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleObserver;
+import androidx.lifecycle.OnLifecycleEvent;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+import androidx.preference.PreferenceManager;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -68,6 +76,7 @@ import java.util.List;
 import java.util.Map;
 
 public class FragmentBase extends Fragment {
+    private CharSequence count = null;
     private CharSequence title = null;
     private CharSequence subtitle = " ";
     private boolean finish = false;
@@ -80,6 +89,8 @@ public class FragmentBase extends Fragment {
     private static final int REQUEST_ATTACHMENTS = 52;
     private static final int REQUEST_RECOVERABLE_PERMISSION = 53;
 
+    static final int REQUEST_PERMISSIONS = 1000;
+
     static final String ACTION_STORE_ATTACHMENT = BuildConfig.APPLICATION_ID + ".STORE_ATTACHMENT";
     static final String ACTION_STORE_ATTACHMENTS = BuildConfig.APPLICATION_ID + ".STORE_ATTACHMENTS";
 
@@ -89,6 +100,11 @@ public class FragmentBase extends Fragment {
             return ((ActivityBase) activity).getSupportActionBar();
         else
             return null;
+    }
+
+    protected void setCount(String count) {
+        this.count = count;
+        updateSubtitle();
     }
 
     protected void setTitle(int resid) {
@@ -107,6 +123,12 @@ public class FragmentBase extends Fragment {
     protected void setSubtitle(CharSequence subtitle) {
         this.subtitle = subtitle;
         updateSubtitle();
+    }
+
+    @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        super.onCreateOptionsMenu(menu, inflater);
+        onPrepareOptionsMenu(menu);
     }
 
     void invalidateOptionsMenu() {
@@ -205,7 +227,6 @@ public class FragmentBase extends Fragment {
         crumb.put("name", this.getClass().getName());
         crumb.put("before", Integer.toString(before));
         crumb.put("after", Integer.toString(after));
-        crumb.put("free", Integer.toString(Log.getFreeMemMb()));
         for (String key : outState.keySet()) {
             Object value = outState.get(key);
             crumb.put(key, value == null ? "" : value.getClass().getName());
@@ -237,7 +258,7 @@ public class FragmentBase extends Fragment {
         // https://developer.android.com/training/basics/fragments/pass-data-between
         String requestKey = getRequestKey();
         if (!BuildConfig.PLAY_STORE_RELEASE)
-            EntityLog.log(getContext(), "Listing key=" + requestKey);
+            EntityLog.log(getContext(), "Listening key=" + requestKey);
         getParentFragmentManager().setFragmentResultListener(requestKey, this, new FragmentResultListener() {
             @Override
             public void onFragmentResult(@NonNull String requestKey, @NonNull Bundle result) {
@@ -313,6 +334,18 @@ public class FragmentBase extends Fragment {
     }
 
     @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            FragmentActivity activity = getActivity();
+            if (activity != null) {
+                activity.getOnBackPressedDispatcher().onBackPressed();
+                return true;
+            }
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         EntityLog.log(getContext(), "Result class=" + this.getClass().getSimpleName() +
                 " action=" + (data == null ? null : data.getAction()) +
@@ -346,7 +379,7 @@ public class FragmentBase extends Fragment {
         try {
             FragmentActivity activity = getActivity();
             if (activity != null) {
-                InputMethodManager imm = (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+                InputMethodManager imm = Helper.getSystemService(activity, InputMethodManager.class);
                 View focused = activity.getCurrentFocus();
                 if (imm != null && focused != null)
                     imm.hideSoftInputFromWindow(focused.getWindowToken(), 0);
@@ -393,15 +426,41 @@ public class FragmentBase extends Fragment {
                     actionbar.setTitle(title == null ? getString(R.string.app_name) : title);
                     actionbar.setSubtitle(subtitle);
                 } else {
+                    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(activity);
+                    boolean list_count = prefs.getBoolean("list_count", false);
+
                     View custom = actionbar.getCustomView();
+                    TextView tvCount = custom.findViewById(R.id.count);
                     TextView tvTitle = custom.findViewById(R.id.title);
                     TextView tvSubtitle = custom.findViewById(R.id.subtitle);
+                    if (tvCount != null) {
+                        tvCount.setText(count);
+                        tvCount.setVisibility(!list_count || TextUtils.isEmpty(count)
+                                ? View.GONE : View.VISIBLE);
+                    }
                     if (tvTitle != null)
                         tvTitle.setText(title == null ? getString(R.string.app_name) : title);
                     if (tvSubtitle != null)
                         tvSubtitle.setText(subtitle);
                 }
         }
+    }
+
+    protected void setBackPressedCallback(OnBackPressedCallback backPressedCallback) {
+        FragmentActivity activity = getActivity();
+        if (activity == null)
+            return;
+        backPressedCallback.setEnabled(true);
+        getViewLifecycleOwner().getLifecycle().addObserver(new LifecycleObserver() {
+            @OnLifecycleEvent(Lifecycle.Event.ON_ANY)
+            public void onAny() {
+                Lifecycle.State state = getViewLifecycleOwner().getLifecycle().getCurrentState();
+                if (state.isAtLeast(Lifecycle.State.STARTED))
+                    activity.getOnBackPressedDispatcher().addCallback(backPressedCallback);
+                else
+                    backPressedCallback.remove();
+            }
+        });
     }
 
     private boolean isPane() {
@@ -445,6 +504,7 @@ public class FragmentBase extends Fragment {
 
         Intent create = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         create.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         create.setType(intent.getStringExtra("type"));
         create.putExtra(Intent.EXTRA_TITLE, intent.getStringExtra("name"));
         Helper.openAdvanced(create);
@@ -503,6 +563,9 @@ public class FragmentBase extends Fragment {
                 try {
                     os = context.getContentResolver().openOutputStream(uri);
                     is = new FileInputStream(file);
+
+                    if (os == null)
+                        throw new FileNotFoundException(uri.toString());
 
                     byte[] buffer = new byte[Helper.BUFFER_SIZE];
                     int read;
@@ -573,41 +636,45 @@ public class FragmentBase extends Fragment {
                 DB db = DB.getInstance(context);
                 DocumentFile tree = DocumentFile.fromTreeUri(context, uri);
                 List<EntityAttachment> attachments = db.attachment().getAttachments(id);
-                for (EntityAttachment attachment : attachments) {
-                    File file = attachment.getFile(context);
+                for (EntityAttachment attachment : attachments)
+                    if (attachment.subsequence == null) {
+                        File file = attachment.getFile(context);
 
-                    String name = Helper.sanitizeFilename(attachment.name);
-                    if (TextUtils.isEmpty(name))
-                        name = Long.toString(attachment.id);
-                    DocumentFile document = tree.createFile(attachment.getMimeType(), name);
-                    if (document == null)
-                        throw new FileNotFoundException("Could not save " + uri + ":" + name);
+                        String name = Helper.sanitizeFilename(attachment.name);
+                        if (TextUtils.isEmpty(name))
+                            name = Long.toString(attachment.id);
+                        DocumentFile document = tree.createFile(attachment.getMimeType(), name);
+                        if (document == null)
+                            throw new FileNotFoundException("Could not save " + uri + ":" + name);
 
-                    OutputStream os = null;
-                    InputStream is = null;
-                    try {
-                        os = context.getContentResolver().openOutputStream(document.getUri());
-                        is = new FileInputStream(file);
-
-                        byte[] buffer = new byte[Helper.BUFFER_SIZE];
-                        int read;
-                        while ((read = is.read(buffer)) != -1)
-                            os.write(buffer, 0, read);
-                    } finally {
+                        OutputStream os = null;
+                        InputStream is = null;
                         try {
-                            if (os != null)
-                                os.close();
-                        } catch (Throwable ex) {
-                            Log.w(ex);
-                        }
-                        try {
-                            if (is != null)
-                                is.close();
-                        } catch (Throwable ex) {
-                            Log.w(ex);
+                            os = context.getContentResolver().openOutputStream(document.getUri());
+                            is = new FileInputStream(file);
+
+                            if (os == null)
+                                throw new FileNotFoundException(uri.toString());
+
+                            byte[] buffer = new byte[Helper.BUFFER_SIZE];
+                            int read;
+                            while ((read = is.read(buffer)) != -1)
+                                os.write(buffer, 0, read);
+                        } finally {
+                            try {
+                                if (os != null)
+                                    os.close();
+                            } catch (Throwable ex) {
+                                Log.w(ex);
+                            }
+                            try {
+                                if (is != null)
+                                    is.close();
+                            } catch (Throwable ex) {
+                                Log.w(ex);
+                            }
                         }
                     }
-                }
 
                 return null;
             }

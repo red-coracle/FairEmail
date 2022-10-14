@@ -24,8 +24,10 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.database.MatrixCursor;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.KeyEvent;
@@ -59,6 +61,9 @@ import java.util.List;
 import io.requery.android.database.sqlite.SQLiteDatabase;
 
 public class FragmentDialogSearch extends FragmentDialogBase {
+    private ImageButton ibMore;
+    private TextView tvMore;
+
     private static final int MAX_SUGGESTIONS = 3;
 
     @NonNull
@@ -81,6 +86,7 @@ public class FragmentDialogSearch extends FragmentDialogBase {
         boolean last_search_notes = prefs.getBoolean("last_search_notes", true);
         boolean last_search_trash = prefs.getBoolean("last_search_trash", true);
         boolean last_search_junk = prefs.getBoolean("last_search_junk", true);
+        boolean last_search_device = prefs.getBoolean("last_search_device", true);
 
         View dview = LayoutInflater.from(context).inflate(R.layout.dialog_search, null);
 
@@ -96,8 +102,8 @@ public class FragmentDialogSearch extends FragmentDialogBase {
         ImageButton ibInvite = dview.findViewById(R.id.ibInvite);
         ImageButton ibAttachment = dview.findViewById(R.id.ibAttachment);
         ImageButton ibNotes = dview.findViewById(R.id.ibNotes);
-        ImageButton ibMore = dview.findViewById(R.id.ibMore);
-        TextView tvMore = dview.findViewById(R.id.tvMore);
+        ibMore = dview.findViewById(R.id.ibMore);
+        tvMore = dview.findViewById(R.id.tvMore);
         CheckBox cbSearchIndex = dview.findViewById(R.id.cbSearchIndex);
         CheckBox cbSenders = dview.findViewById(R.id.cbSenders);
         CheckBox cbRecipients = dview.findViewById(R.id.cbRecipients);
@@ -120,6 +126,7 @@ public class FragmentDialogSearch extends FragmentDialogBase {
         Button btnAfter = dview.findViewById(R.id.btnAfter);
         TextView tvBefore = dview.findViewById(R.id.tvBefore);
         TextView tvAfter = dview.findViewById(R.id.tvAfter);
+        CheckBox cbSearchDevice = dview.findViewById(R.id.cbSearchDevice);
         Group grpMore = dview.findViewById(R.id.grpMore);
 
         ibInfo.setOnClickListener(new View.OnClickListener() {
@@ -254,14 +261,12 @@ public class FragmentDialogSearch extends FragmentDialogBase {
         ibMore.setOnClickListener(onMore);
         tvMore.setOnClickListener(onMore);
 
+        evalMore();
+
         cbSearchIndex.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 prefs.edit().putBoolean("last_fts", isChecked).apply();
-                cbHeaders.setEnabled(!isChecked);
-                cbHtml.setEnabled(!isChecked);
-                cbAttachments.setEnabled(!isChecked);
-                spMessageSize.setEnabled(!isChecked);
             }
         });
 
@@ -269,6 +274,7 @@ public class FragmentDialogSearch extends FragmentDialogBase {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 prefs.edit().putBoolean("last_search_senders", isChecked).apply();
+                evalMore();
             }
         });
 
@@ -276,6 +282,7 @@ public class FragmentDialogSearch extends FragmentDialogBase {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 prefs.edit().putBoolean("last_search_recipients", isChecked).apply();
+                evalMore();
             }
         });
 
@@ -283,6 +290,7 @@ public class FragmentDialogSearch extends FragmentDialogBase {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 prefs.edit().putBoolean("last_search_subject", isChecked).apply();
+                evalMore();
             }
         });
 
@@ -297,6 +305,7 @@ public class FragmentDialogSearch extends FragmentDialogBase {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 prefs.edit().putBoolean("last_search_message", isChecked).apply();
+                evalMore();
             }
         });
 
@@ -352,6 +361,13 @@ public class FragmentDialogSearch extends FragmentDialogBase {
             }
         });
 
+        cbSearchDevice.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
+                prefs.edit().putBoolean("last_search_device", isChecked).apply();
+            }
+        });
+
         ibMore.setImageLevel(1);
         cbSearchIndex.setChecked(last_fts && fts && pro);
         cbSearchIndex.setEnabled(fts && pro);
@@ -363,10 +379,12 @@ public class FragmentDialogSearch extends FragmentDialogBase {
         tvSearchTextUnsupported.setText(getString(R.string.title_search_text_unsupported,
                 "full text search not supported"));
         cbNotes.setChecked(last_search_notes);
-        tvAfter.setText(null);
-        tvBefore.setText(null);
         cbSearchTrash.setChecked(last_search_trash);
         cbSearchJunk.setChecked(last_search_junk);
+        tvAfter.setText(null);
+        tvBefore.setText(null);
+        cbSearchDevice.setChecked(last_search_device);
+        cbSearchDevice.setEnabled(account > 0 && folder > 0);
 
         grpMore.setVisibility(View.GONE);
         cbHeaders.setVisibility(View.GONE);
@@ -385,20 +403,20 @@ public class FragmentDialogSearch extends FragmentDialogBase {
                         if (TextUtils.isEmpty(criteria.query))
                             criteria.query = null;
 
-                        criteria.fts = cbSearchIndex.isChecked();
+                        criteria.fts = (cbSearchIndex.isChecked() && cbSearchIndex.isEnabled());
                         criteria.in_senders = cbSenders.isChecked();
                         criteria.in_recipients = cbRecipients.isChecked();
                         criteria.in_subject = cbSubject.isChecked();
                         criteria.in_keywords = cbKeywords.isChecked();
                         criteria.in_message = cbMessage.isChecked();
                         criteria.in_notes = cbNotes.isChecked();
-                        criteria.in_headers = (!criteria.fts && cbHeaders.isChecked());
-                        criteria.in_html = (!criteria.fts && cbHtml.isChecked());
+                        criteria.in_headers = cbHeaders.isChecked();
+                        criteria.in_html = cbHtml.isChecked();
                         criteria.with_unseen = cbUnseen.isChecked();
                         criteria.with_flagged = cbFlagged.isChecked();
                         criteria.with_hidden = cbHidden.isChecked();
                         criteria.with_encrypted = cbEncrypted.isChecked();
-                        criteria.with_attachments = (!criteria.fts && cbAttachments.isChecked());
+                        criteria.with_attachments = cbAttachments.isChecked();
 
                         if (!criteria.fts) {
                             int pos = spMessageSize.getSelectedItemPosition();
@@ -418,6 +436,8 @@ public class FragmentDialogSearch extends FragmentDialogBase {
                             criteria.after = ((Calendar) after).getTimeInMillis();
                         if (before != null)
                             criteria.before = ((Calendar) before).getTimeInMillis();
+
+                        boolean device = (cbSearchDevice.isChecked() || !cbSearchDevice.isEnabled());
 
                         if (criteria.query != null) {
                             List<String> searches = new ArrayList<>();
@@ -471,7 +491,7 @@ public class FragmentDialogSearch extends FragmentDialogBase {
                                             context, getViewLifecycleOwner(), getParentFragmentManager(),
                                             account,
                                             archive == null ? folder : archive.id,
-                                            archive != null,
+                                            archive != null || !device,
                                             criteria);
                                 }
 
@@ -483,7 +503,9 @@ public class FragmentDialogSearch extends FragmentDialogBase {
                         else
                             FragmentMessages.search(
                                     context, getViewLifecycleOwner(), getParentFragmentManager(),
-                                    account, folder, false, criteria);
+                                    account, folder,
+                                    !device,
+                                    criteria);
                     }
                 })
                 .setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
@@ -513,9 +535,13 @@ public class FragmentDialogSearch extends FragmentDialogBase {
                 else if (id == R.id.ibNotes)
                     criteria.with_notes = true;
 
+                boolean device = (cbSearchDevice.isChecked() || !cbSearchDevice.isEnabled());
+
                 FragmentMessages.search(
                         context, getViewLifecycleOwner(), getParentFragmentManager(),
-                        account, folder, false, criteria);
+                        account, folder,
+                        !device,
+                        criteria);
             }
         };
 
@@ -556,6 +582,21 @@ public class FragmentDialogSearch extends FragmentDialogBase {
         return dialog;
     }
 
+    private void evalMore() {
+        final Context context = tvMore.getContext();
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        boolean last_search_senders = prefs.getBoolean("last_search_senders", true);
+        boolean last_search_recipients = prefs.getBoolean("last_search_recipients", true);
+        boolean last_search_subject = prefs.getBoolean("last_search_subject", true);
+        boolean last_search_message = prefs.getBoolean("last_search_message", true);
+
+        boolean all = (last_search_senders && last_search_recipients && last_search_subject && last_search_message);
+        int color = Helper.resolveColor(context, all ? android.R.attr.textColorSecondary : R.attr.colorWarning);
+        ibMore.setImageTintList(ColorStateList.valueOf(color));
+        tvMore.setTextColor(color);
+        tvMore.setTypeface(all ? Typeface.DEFAULT : Typeface.DEFAULT_BOLD);
+    }
+
     @Override
     public void onActivityCreated(@Nullable Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
@@ -576,6 +617,11 @@ public class FragmentDialogSearch extends FragmentDialogBase {
                 new DatePickerDialog.OnDateSetListener() {
                     @Override
                     public void onDateSet(DatePicker view, int year, int month, int day) {
+                        cal.set(Calendar.MILLISECOND, 0);
+                        cal.set(Calendar.SECOND, 0);
+                        cal.set(Calendar.MINUTE, 0);
+                        cal.set(Calendar.HOUR, 0);
+
                         cal.set(Calendar.YEAR, year);
                         cal.set(Calendar.MONTH, month);
                         cal.set(Calendar.DAY_OF_MONTH, day);

@@ -79,11 +79,13 @@ public class EntityContact implements Serializable {
     public Long id;
     @NonNull
     public Long account;
+    public Long identity; // no foreign key, no index
     @NonNull
     public int type;
     @NonNull
     public String email;
     public String name;
+    public String group;
     public String avatar;
 
     @NonNull
@@ -163,10 +165,14 @@ public class EntityContact implements Serializable {
                 addresses.addAll(Arrays.asList(message.bcc));
         }
 
-        update(context, folder.account, addresses.toArray(new Address[0]), type, message.received);
+        update(context, folder.account, message.identity, addresses.toArray(new Address[0]), type, message.received);
     }
 
-    public static void update(Context context, long account, Address[] addresses, int type, long time) {
+    public static void update(Context context, long account, Long identity, Address[] addresses, int type, long time) {
+        update(context, account, identity, addresses, null, type, time);
+    }
+
+    public static void update(Context context, long account, Long identity, Address[] addresses, String group, int type, long time) {
         if (addresses == null)
             return;
 
@@ -188,9 +194,11 @@ public class EntityContact implements Serializable {
                 if (contact == null) {
                     contact = new EntityContact();
                     contact.account = account;
+                    contact.identity = identity;
                     contact.type = type;
                     contact.email = email;
                     contact.name = name;
+                    contact.group = group;
                     contact.avatar = (avatar == null ? null : avatar.toString());
                     contact.times_contacted = 1;
                     contact.first_contacted = time;
@@ -198,8 +206,11 @@ public class EntityContact implements Serializable {
                     contact.id = db.contact().insertContact(contact);
                     Log.i("Inserted contact=" + contact + " type=" + type);
                 } else {
+                    contact.identity = identity;
                     if (contact.name == null && name != null)
                         contact.name = name;
+                    if (contact.group == null && group != null)
+                        contact.group = group;
                     contact.avatar = (avatar == null ? null : avatar.toString());
                     contact.times_contacted++;
                     contact.first_contacted = Math.min(contact.first_contacted, time);
@@ -231,9 +242,11 @@ public class EntityContact implements Serializable {
     public JSONObject toJSON() throws JSONException {
         JSONObject json = new JSONObject();
         json.put("id", id);
+        json.put("identity", identity);
         json.put("type", type);
         json.put("email", email);
         json.put("name", name);
+        json.put("group", group);
         json.put("avatar", avatar);
         json.put("times_contacted", times_contacted);
         json.put("first_contacted", first_contacted);
@@ -245,11 +258,17 @@ public class EntityContact implements Serializable {
     public static EntityContact fromJSON(JSONObject json) throws JSONException {
         EntityContact contact = new EntityContact();
         // id
+        if (json.has("identity") && !json.isNull("identity"))
+            contact.identity = json.getLong("identity");
+
         contact.type = json.getInt("type");
         contact.email = json.getString("email");
 
         if (json.has("name") && !json.isNull("name"))
             contact.name = json.getString("name");
+
+        if (json.has("group") && !json.isNull("group"))
+            contact.group = json.getString("group");
 
         if (json.has("avatar") && !json.isNull("avatar"))
             contact.avatar = json.getString("avatar");
@@ -267,9 +286,11 @@ public class EntityContact implements Serializable {
         if (obj instanceof EntityContact) {
             EntityContact other = (EntityContact) obj;
             return (this.account.equals(other.account) &&
+                    Objects.equals(this.identity, other.identity) &&
                     this.type == other.type &&
                     this.email.equals(other.email) &&
                     Objects.equals(this.name, other.name) &&
+                    Objects.equals(this.group, other.group) &&
                     Objects.equals(this.avatar, other.avatar) &&
                     this.times_contacted.equals(other.times_contacted) &&
                     this.first_contacted.equals(first_contacted) &&

@@ -36,7 +36,6 @@ import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.text.method.LinkMovementMethod;
-import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -55,8 +54,10 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.constraintlayout.widget.Group;
 import androidx.lifecycle.Lifecycle;
 import androidx.preference.PreferenceManager;
@@ -122,6 +123,7 @@ public class FragmentIdentity extends FragmentBase {
     private CheckBox cbSignDefault;
     private CheckBox cbEncryptDefault;
     private CheckBox cbUnicode;
+    private CheckBox cbOctetMime;
     private EditText etMaxSize;
 
     private Button btnSave;
@@ -220,6 +222,7 @@ public class FragmentIdentity extends FragmentBase {
         cbSignDefault = view.findViewById(R.id.cbSignDefault);
         cbEncryptDefault = view.findViewById(R.id.cbEncryptDefault);
         cbUnicode = view.findViewById(R.id.cbUnicode);
+        cbOctetMime = view.findViewById(R.id.cbOctetMime);
         etMaxSize = view.findViewById(R.id.etMaxSize);
 
         btnSave = view.findViewById(R.id.btnSave);
@@ -242,6 +245,9 @@ public class FragmentIdentity extends FragmentBase {
         spAccount.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> adapterView, View view, int position, long id) {
+                if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+                    return;
+
                 grpAuthorize.setVisibility(position > 0 ? View.VISIBLE : View.GONE);
                 if (position == 0) {
                     grpError.setVisibility(View.GONE);
@@ -303,6 +309,9 @@ public class FragmentIdentity extends FragmentBase {
 
             @Override
             public void afterTextChanged(Editable editable) {
+                if (etDomain == null)
+                    return;
+
                 String[] email = editable.toString().split("@");
                 etDomain.setText(email.length < 2 ? null : email[1]);
             }
@@ -323,6 +332,9 @@ public class FragmentIdentity extends FragmentBase {
 
             @Override
             public void afterTextChanged(Editable s) {
+                if (tilPassword == null)
+                    return;
+
                 checkPassword(s.toString());
             }
         });
@@ -481,16 +493,13 @@ public class FragmentIdentity extends FragmentBase {
             }
         });
 
-        addKeyPressedListener(new ActivityBase.IKeyPressedListener() {
+        setBackPressedCallback(new OnBackPressedCallback(true) {
             @Override
-            public boolean onKeyPressed(KeyEvent event) {
-                return false;
-            }
-
-            @Override
-            public boolean onBackPressed() {
-                onSave(true);
-                return true;
+            public void handleOnBackPressed() {
+                if (Helper.isKeyboardVisible(view))
+                    Helper.hideKeyboard(view);
+                else
+                    onSave(true);
             }
         });
 
@@ -505,7 +514,7 @@ public class FragmentIdentity extends FragmentBase {
         btnSupport.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Helper.view(v.getContext(), Helper.getSupportUri(v.getContext()), false);
+                Helper.view(v.getContext(), Helper.getSupportUri(v.getContext(), "Identity:support"), false);
             }
         });
 
@@ -552,7 +561,7 @@ public class FragmentIdentity extends FragmentBase {
         cbTrust.setChecked(false);
 
         etUser.setEnabled(auth == AUTH_TYPE_PASSWORD);
-        tilPassword.setEnabled(auth == AUTH_TYPE_PASSWORD);
+        tilPassword.getEditText().setEnabled(auth == AUTH_TYPE_PASSWORD);
         btnCertificate.setEnabled(auth == AUTH_TYPE_PASSWORD);
     }
 
@@ -659,6 +668,7 @@ public class FragmentIdentity extends FragmentBase {
         args.putBoolean("sign_default", cbSignDefault.isChecked());
         args.putBoolean("encrypt_default", cbEncryptDefault.isChecked());
         args.putBoolean("unicode", cbUnicode.isChecked());
+        args.putBoolean("octetmime", cbOctetMime.isChecked());
         args.putString("max_size", etMaxSize.getText().toString());
         args.putLong("account", account == null ? -1 : account.id);
         args.putString("host", etHost.getText().toString().trim().replace(" ", ""));
@@ -701,7 +711,7 @@ public class FragmentIdentity extends FragmentBase {
                 Helper.setViewsEnabled(view, true);
                 if (auth != AUTH_TYPE_PASSWORD) {
                     etUser.setEnabled(false);
-                    tilPassword.setEnabled(false);
+                    tilPassword.getEditText().setEnabled(false);
                     btnCertificate.setEnabled(false);
                 }
                 pbSave.setVisibility(View.GONE);
@@ -745,6 +755,7 @@ public class FragmentIdentity extends FragmentBase {
                 boolean sign_default = args.getBoolean("sign_default");
                 boolean encrypt_default = args.getBoolean("encrypt_default");
                 boolean unicode = args.getBoolean("unicode");
+                boolean octetmime = args.getBoolean("octetmime");
                 String max_size = args.getString("max_size");
 
                 boolean should = args.getBoolean("should");
@@ -900,6 +911,8 @@ public class FragmentIdentity extends FragmentBase {
                         return true;
                     if (!Objects.equals(identity.unicode, unicode))
                         return true;
+                    if (!Objects.equals(identity.octetmime, octetmime))
+                        return true;
                     if (user_max_size != null && !Objects.equals(identity.max_size, user_max_size))
                         return true;
                     if (identity.error != null && identity.synchronize)
@@ -937,7 +950,7 @@ public class FragmentIdentity extends FragmentBase {
                     // Create transport
                     String protocol = (encryption == EmailService.ENCRYPTION_SSL ? "smtps" : "smtp");
                     try (EmailService iservice = new EmailService(
-                            context, protocol, realm, encryption, insecure,
+                            context, protocol, realm, encryption, insecure, unicode,
                             EmailService.PURPOSE_CHECK, true)) {
                         iservice.setUseIp(use_ip, ehlo);
                         iservice.connect(
@@ -997,6 +1010,7 @@ public class FragmentIdentity extends FragmentBase {
                     identity.sign_default = sign_default;
                     identity.encrypt_default = encrypt_default;
                     identity.unicode = unicode;
+                    identity.octetmime = octetmime;
                     identity.sent_folder = null;
                     identity.sign_key = null;
                     identity.sign_key_alias = null;
@@ -1035,7 +1049,7 @@ public class FragmentIdentity extends FragmentBase {
                     fragment.setTargetFragment(FragmentIdentity.this, REQUEST_SAVE);
                     fragment.show(getParentFragmentManager(), "identity:save");
                 } else if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
-                    getParentFragmentManager().popBackStack();
+                    finish();
             }
 
             @Override
@@ -1090,11 +1104,11 @@ public class FragmentIdentity extends FragmentBase {
 
     @Override
     public void onSaveInstanceState(Bundle outState) {
-        outState.putInt("fair:account", spAccount.getSelectedItemPosition());
-        outState.putInt("fair:provider", spProvider.getSelectedItemPosition());
+        outState.putInt("fair:account", spAccount == null ? 0 : spAccount.getSelectedItemPosition());
+        outState.putInt("fair:provider", spProvider == null ? 0 : spProvider.getSelectedItemPosition());
         outState.putString("fair:certificate", certificate);
-        outState.putString("fair:password", tilPassword.getEditText().getText().toString());
-        outState.putInt("fair:advanced", grpAdvanced.getVisibility());
+        outState.putString("fair:password", tilPassword == null ? null : tilPassword.getEditText().getText().toString());
+        outState.putInt("fair:advanced", grpAdvanced == null ? View.VISIBLE : grpAdvanced.getVisibility());
         outState.putInt("fair:auth", auth);
         outState.putString("fair:authprovider", provider);
         outState.putString("fair:html", signature);
@@ -1181,6 +1195,7 @@ public class FragmentIdentity extends FragmentBase {
                     cbSignDefault.setChecked(identity != null && identity.sign_default);
                     cbEncryptDefault.setChecked(identity != null && identity.encrypt_default);
                     cbUnicode.setChecked(identity != null && identity.unicode);
+                    cbOctetMime.setChecked(identity != null && identity.octetmime);
 
                     auth = (identity == null ? AUTH_TYPE_PASSWORD : identity.auth_type);
                     provider = (identity == null ? null : identity.provider);
@@ -1218,8 +1233,41 @@ public class FragmentIdentity extends FragmentBase {
 
                 if (auth != AUTH_TYPE_PASSWORD) {
                     etUser.setEnabled(false);
-                    tilPassword.setEnabled(false);
+                    tilPassword.getEditText().setEnabled(false);
                     btnCertificate.setEnabled(false);
+
+                    tilPassword.setEndIconDrawable(R.drawable.twotone_edit_24);
+                    tilPassword.setEndIconOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View view) {
+                            PopupMenuLifecycle popupMenu = new PopupMenuLifecycle(getContext(), FragmentIdentity.this, view);
+
+                            popupMenu.getMenu().add(Menu.NONE, R.string.title_account_auth_password, 1, R.string.title_account_auth_password);
+
+                            popupMenu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+                                @Override
+                                public boolean onMenuItemClick(MenuItem item) {
+                                    int id = item.getItemId();
+                                    if (id == R.string.title_account_auth_password) {
+                                        onPassword();
+                                        return true;
+                                    } else
+                                        return false;
+                                }
+
+                                private void onPassword() {
+                                    auth = AUTH_TYPE_PASSWORD;
+                                    etUser.setEnabled(true);
+                                    tilPassword.getEditText().setText(null);
+                                    tilPassword.getEditText().setEnabled(true);
+                                    tilPassword.setEndIconMode(END_ICON_PASSWORD_TOGGLE);
+                                    tilPassword.requestFocus();
+                                }
+                            });
+
+                            popupMenu.show();
+                        }
+                    });
                 }
 
                 cbPrimary.setEnabled(cbSynchronize.isChecked());
@@ -1376,15 +1424,15 @@ public class FragmentIdentity extends FragmentBase {
                             }
                         });
                         onSave(false);
-                    } else if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
-                        getParentFragmentManager().popBackStack();
+                    } else
+                        finish();
                     break;
                 case REQUEST_DELETE:
                     if (resultCode == RESULT_OK)
                         onDelete();
                     break;
                 case REQUEST_SIGNATURE:
-                    if (resultCode == RESULT_OK)
+                    if (resultCode == RESULT_OK && data != null)
                         onHtml(data.getExtras());
                     break;
             }
@@ -1418,8 +1466,7 @@ public class FragmentIdentity extends FragmentBase {
 
             @Override
             protected void onExecuted(Bundle args, Void data) {
-                if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
-                    getParentFragmentManager().popBackStack();
+                finish();
             }
 
             @Override

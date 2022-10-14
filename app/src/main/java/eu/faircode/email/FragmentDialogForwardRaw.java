@@ -23,6 +23,7 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -31,6 +32,9 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -41,6 +45,7 @@ import androidx.core.content.FileProvider;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Observer;
+import androidx.preference.PreferenceManager;
 
 import java.io.File;
 import java.text.NumberFormat;
@@ -51,25 +56,32 @@ import java.util.Objects;
 public class FragmentDialogForwardRaw extends FragmentDialogBase {
     private boolean enabled;
 
+    private static final long AUTO_CONFIRM_DELAY = 2 * 1000L;
+
     @NonNull
     @Override
     public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
         Bundle args = getArguments();
-        long account = args.getLong("account");
         long[] ids = args.getLongArray("ids");
 
         if (savedInstanceState != null)
             enabled = savedInstanceState.getBoolean("fair:enabled");
 
-        View dview = LayoutInflater.from(getContext()).inflate(R.layout.dialog_forward_raw, null);
+        final Context context = getContext();
+        View dview = LayoutInflater.from(context).inflate(R.layout.dialog_forward_raw, null);
         ProgressBar pbDownloaded = dview.findViewById(R.id.pbDownloaded);
         TextView tvRemaining = dview.findViewById(R.id.tvRemaining);
         TextView tvOption = dview.findViewById(R.id.tvOption);
         TextView tvNoInternet = dview.findViewById(R.id.tvNoInternet);
+        CheckBox cbAutoConfirm = dview.findViewById(R.id.cbAutoConfirm);
+
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        boolean eml_auto_confirm = prefs.getBoolean("eml_auto_confirm", false);
 
         pbDownloaded.setProgress(0);
         pbDownloaded.setMax(ids.length);
         tvRemaining.setText(getString(R.string.title_eml_downloaded, "-"));
+        cbAutoConfirm.setChecked(eml_auto_confirm);
 
         tvOption.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -77,6 +89,13 @@ public class FragmentDialogForwardRaw extends FragmentDialogBase {
                 v.getContext().startActivity(new Intent(v.getContext(), ActivitySetup.class)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK)
                         .putExtra("tab", "connection"));
+            }
+        });
+
+        cbAutoConfirm.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
+                prefs.edit().putBoolean("eml_auto_confirm", checked).apply();
             }
         });
 
@@ -128,10 +147,12 @@ public class FragmentDialogForwardRaw extends FragmentDialogBase {
                             continue;
 
                         for (EntityMessage thread : messages) {
-                            String hash = (message.hash == null ? message.msgid : message.hash);
-                            if (hashes.contains(hash))
-                                continue;
-                            hashes.add(hash);
+                            if (threads) {
+                                String hash = (message.hash == null ? message.msgid : message.hash);
+                                if (hashes.contains(hash))
+                                    continue;
+                                hashes.add(hash);
+                            }
 
                             result.add(thread.id);
 
@@ -153,7 +174,7 @@ public class FragmentDialogForwardRaw extends FragmentDialogBase {
 
             @Override
             protected void onExecuted(Bundle args, long[] ids) {
-                DB db = DB.getInstance(getContext());
+                DB db = DB.getInstance(context);
                 LiveData<Integer> ld = db.message().liveRaw(ids);
                 ld.observe(getViewLifecycleOwner(), new Observer<Integer>() {
                     @Override
@@ -172,8 +193,31 @@ public class FragmentDialogForwardRaw extends FragmentDialogBase {
                             ld.removeObserver(this);
                             getArguments().putLong("account", args.getLong("account"));
                             getArguments().putLongArray("ids", ids);
+
                             enabled = true;
-                            setButtonEnabled(enabled);
+
+                            Button ok = getPositiveButton();
+                            if (ok == null)
+                                return;
+
+                            ok.setEnabled(enabled);
+
+                            boolean eml_auto_confirm = prefs.getBoolean("eml_auto_confirm", false);
+                            if (eml_auto_confirm)
+                                ok.postDelayed(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        try {
+                                            if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+                                                return;
+                                            Button ok = getPositiveButton();
+                                            if (ok != null)
+                                                ok.performClick();
+                                        } catch (Throwable ex) {
+                                            Log.e(ex);
+                                        }
+                                    }
+                                }, AUTO_CONFIRM_DELAY);
                         }
                     }
                 });
@@ -185,11 +229,13 @@ public class FragmentDialogForwardRaw extends FragmentDialogBase {
             }
         }.execute(this, getArguments(), "messages:forward");
 
-        return new AlertDialog.Builder(getContext())
+        return new AlertDialog.Builder(context)
                 .setView(dview)
                 .setPositiveButton(R.string.title_send, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
+                        long account = getArguments().getLong("account", -1L);
+                        long[] ids = getArguments().getLongArray("ids");
                         send(account, ids);
                     }
                 })
@@ -206,20 +252,20 @@ public class FragmentDialogForwardRaw extends FragmentDialogBase {
     @Override
     public void onStart() {
         super.onStart();
-        setButtonEnabled(enabled);
+        Button ok = getPositiveButton();
+        if (ok != null)
+            ok.setEnabled(enabled);
     }
 
-    void setButtonEnabled(boolean enabled) {
-        ((AlertDialog) getDialog())
-                .getButton(AlertDialog.BUTTON_POSITIVE)
-                .setEnabled(enabled);
+    private Button getPositiveButton() {
+        return ((AlertDialog) getDialog()).getButton(AlertDialog.BUTTON_POSITIVE);
     }
 
     @Override
     public void onResume() {
         super.onResume();
 
-        ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+        ConnectivityManager cm = Helper.getSystemService(getContext(), ConnectivityManager.class);
         NetworkRequest.Builder builder = new NetworkRequest.Builder();
         builder.addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
         cm.registerNetworkCallback(builder.build(), networkCallback);
@@ -229,7 +275,7 @@ public class FragmentDialogForwardRaw extends FragmentDialogBase {
     public void onPause() {
         super.onPause();
 
-        ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+        ConnectivityManager cm = Helper.getSystemService(getContext(), ConnectivityManager.class);
         cm.unregisterNetworkCallback(networkCallback);
     }
 
@@ -252,7 +298,7 @@ public class FragmentDialogForwardRaw extends FragmentDialogBase {
             send.setPackage(BuildConfig.APPLICATION_ID);
             send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
             send.setType("message/rfc822");
-            send.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             send.putExtra("fair:account", account);
 
             startActivity(send);

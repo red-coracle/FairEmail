@@ -132,7 +132,7 @@ public class AdapterCertificate extends RecyclerView.Adapter<AdapterCertificate.
                             if (certificate == null)
                                 return null;
 
-                            File dir = new File(context.getCacheDir(), "shared");
+                            File dir = new File(context.getFilesDir(), "shared");
                             if (!dir.exists())
                                 dir.mkdir();
 
@@ -250,7 +250,12 @@ public class AdapterCertificate extends RecyclerView.Adapter<AdapterCertificate.
                 Log.d("Changed @" + position + " #" + count);
             }
         });
-        diff.dispatchUpdatesTo(this);
+
+        try {
+            diff.dispatchUpdatesTo(this);
+        } catch (Throwable ex) {
+            Log.e(ex);
+        }
     }
 
     private static class DiffCallback extends DiffUtil.Callback {

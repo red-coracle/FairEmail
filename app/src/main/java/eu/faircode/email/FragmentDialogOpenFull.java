@@ -20,8 +20,6 @@ package eu.faircode.email;
 */
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
-import static androidx.webkit.WebSettingsCompat.FORCE_DARK_OFF;
-import static androidx.webkit.WebSettingsCompat.FORCE_DARK_ON;
 
 import android.app.Dialog;
 import android.content.Context;
@@ -82,12 +80,13 @@ public class FragmentDialogOpenFull extends FragmentDialogBase {
         settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-        if (WebViewEx.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE))
+        if (WebViewEx.isFeatureSupported(context, WebViewFeature.SAFE_BROWSING_ENABLE))
             WebSettingsCompat.setSafeBrowsingEnabled(settings, safe_browsing);
 
         boolean dark = (Helper.isDarkTheme(context) && !force_light);
-        if (WebViewEx.isFeatureSupported(WebViewFeature.FORCE_DARK))
-            WebSettingsCompat.setForceDark(settings, dark ? FORCE_DARK_ON : FORCE_DARK_OFF);
+        boolean canDarken = WebViewEx.isFeatureSupported(context, WebViewFeature.ALGORITHMIC_DARKENING);
+        if (canDarken && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, dark);
 
         settings.setLoadsImagesAutomatically(true);
         settings.setBlockNetworkLoads(false);

@@ -83,12 +83,14 @@ public class ActivityAnswer extends ActivityBase {
                     }
                 });
 
-                String html = answer.getHtml(null);
+                String html = answer.getHtml(context, null);
                 String text = HtmlHelper.getText(context, html);
 
-                ClipboardManager cbm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipboardManager cbm = Helper.getSystemService(ActivityAnswer.this, ClipboardManager.class);
                 cbm.setPrimaryClip(ClipData.newHtmlText(getString(R.string.app_name), text, html));
-                ToastEx.makeText(context, R.string.title_clipboard_copied, Toast.LENGTH_LONG).show();
+
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU)
+                    ToastEx.makeText(context, R.string.title_clipboard_copied, Toast.LENGTH_LONG).show();
 
                 if (!readonly) {
                     Intent result = new Intent();

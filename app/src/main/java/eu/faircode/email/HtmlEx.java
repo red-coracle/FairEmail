@@ -42,6 +42,7 @@ import android.text.style.SuperscriptSpan;
 import android.text.style.TypefaceSpan;
 import android.text.style.URLSpan;
 import android.text.style.UnderlineSpan;
+import android.util.StringBuilderPrinter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -103,7 +104,7 @@ public class HtmlEx {
         int next;
         for (int i = 0; i < len; i = next) {
             next = text.nextSpanTransition(i, len, ParagraphStyle.class);
-            ParagraphStyle[] style = text.getSpans(i, next, ParagraphStyle.class);
+            ParagraphStyle[] style = getSpans(text, i, next, ParagraphStyle.class);
             String elements = " ";
             boolean needDiv = false;
 
@@ -140,8 +141,17 @@ public class HtmlEx {
             int n1 = text.nextSpanTransition(i, end, QuoteSpan.class);
             int n2 = text.nextSpanTransition(i, end, eu.faircode.email.IndentSpan.class);
             next = Math.min(n1, n2);
+            if (next > end) {
+                StringBuilder sb = new StringBuilder();
+                TextUtils.dumpSpans(text, new StringBuilderPrinter(sb), "withinDiv ");
+                sb.append(" next=").append(next);
+                sb.append(" start=").append(start);
+                sb.append(" end=").append(end);
+                eu.faircode.email.Log.e(sb.toString());
+                next = end;
+            }
             List<Object> spans = new ArrayList<>();
-            for (Object span : text.getSpans(i, next, LeadingMarginSpan.class))
+            for (Object span : getSpans(text, i, next, LeadingMarginSpan.class))
                 if (span instanceof QuoteSpan ||
                         span instanceof eu.faircode.email.IndentSpan)
                     spans.add(span);
@@ -187,7 +197,7 @@ public class HtmlEx {
             margin = "margin-top:0; margin-bottom:0;";
         }
         if (includeTextAlign) {
-            final AlignmentSpan[] alignmentSpans = text.getSpans(start, end, AlignmentSpan.class);
+            final AlignmentSpan[] alignmentSpans = getSpans(text, start, end, AlignmentSpan.class);
 
             // Only use the last AlignmentSpan with flag SPAN_PARAGRAPH
             for (int i = alignmentSpans.length - 1; i >= 0; i--) {
@@ -252,7 +262,7 @@ public class HtmlEx {
                 if (i != text.length())
                     out.append("<br>\n");
             } else {
-                eu.faircode.email.LineSpan[] line = text.getSpans(i, next, eu.faircode.email.LineSpan.class);
+                eu.faircode.email.LineSpan[] line = getSpans(text, i, next, eu.faircode.email.LineSpan.class);
                 if (line.length > 0) {
                     for (int l = 0; l < line.length; l++)
                         out.append("<hr>");
@@ -261,7 +271,7 @@ public class HtmlEx {
 
                 int level = 0;
                 Boolean isBulletListItem = null;
-                ParagraphStyle[] paragraphStyles = text.getSpans(i, next, ParagraphStyle.class);
+                ParagraphStyle[] paragraphStyles = getSpans(text, i, next, ParagraphStyle.class);
                 for (ParagraphStyle paragraphStyle : paragraphStyles) {
                     final int spanFlags = text.getSpanFlags(paragraphStyle);
                     if ((spanFlags & Spanned.SPAN_PARAGRAPH) == Spanned.SPAN_PARAGRAPH
@@ -361,7 +371,7 @@ public class HtmlEx {
         int next;
         for (int i = start; i < end; i = next) {
             next = text.nextSpanTransition(i, end, CharacterStyle.class);
-            CharacterStyle[] style = text.getSpans(i, next, CharacterStyle.class);
+            CharacterStyle[] style = getSpans(text, i, next, CharacterStyle.class);
 
             for (int j = 0; j < style.length; j++) {
                 if (style[j] instanceof StyleSpan) {
@@ -392,6 +402,9 @@ public class HtmlEx {
                 if (style[j] instanceof UnderlineSpan) {
                     out.append("<u>");
                 }
+                if (style[j] instanceof StyleHelper.MarkSpan) {
+                    out.append("<mark>");
+                }
                 if (style[j] instanceof StrikethroughSpan) {
                     out.append("<span style=\"text-decoration:line-through;\">");
                 }
@@ -403,7 +416,19 @@ public class HtmlEx {
                 if (style[j] instanceof ImageSpan) {
                     out.append("<img src=\"");
                     out.append(((ImageSpan) style[j]).getSource());
-                    out.append("\">");
+                    out.append("\"");
+
+                    if (style[j] instanceof ImageSpanEx) {
+                        ImageSpanEx img = (ImageSpanEx) style[j];
+                        int w = img.getWidth();
+                        if (w > 0)
+                            out.append(" width=\"").append(w).append("\"");
+                        int h = img.getHeight();
+                        if (h > 0)
+                            out.append(" height=\"").append(h).append("\"");
+                    }
+
+                    out.append(">");
 
                     // Don't output the dummy character underlying the image.
                     i = next;
@@ -421,7 +446,12 @@ public class HtmlEx {
                 }
                 if (style[j] instanceof RelativeSizeSpan) {
                     float sizeEm = ((RelativeSizeSpan) style[j]).getSizeChange();
-                    out.append(String.format("<span style=\"font-size:%.2fem;\">", sizeEm));
+                    if (sizeEm < 1)
+                        out.append(String.format("<span style=\"font-size:%s;\">",
+                                sizeEm < HtmlHelper.FONT_SMALL ? "x-small" : "small"));
+                    else if (sizeEm > 1)
+                        out.append(String.format("<span style=\"font-size:%s;\">",
+                                sizeEm > HtmlHelper.FONT_LARGE ? "x-large" : "large"));
                 }
                 if (style[j] instanceof ForegroundColorSpan) {
                     int color = ((ForegroundColorSpan) style[j]).getForegroundColor();
@@ -429,7 +459,7 @@ public class HtmlEx {
                     out.append(String.format("<span style=\"color:%s;\">",
                             eu.faircode.email.HtmlHelper.encodeWebColor(color)));
                 }
-                if (style[j] instanceof BackgroundColorSpan) {
+                if (style[j] instanceof BackgroundColorSpan && !(style[j] instanceof StyleHelper.MarkSpan)) {
                     int color = ((BackgroundColorSpan) style[j]).getBackgroundColor();
                     //out.append(String.format("<span style=\"background-color:#%06X;\">",
                     //        0xFFFFFF & color));
@@ -441,7 +471,7 @@ public class HtmlEx {
             withinStyle(out, text, i, next);
 
             for (int j = style.length - 1; j >= 0; j--) {
-                if (style[j] instanceof BackgroundColorSpan) {
+                if (style[j] instanceof BackgroundColorSpan && !(style[j] instanceof StyleHelper.MarkSpan)) {
                     out.append("</span>");
                 }
                 if (style[j] instanceof ForegroundColorSpan) {
@@ -458,6 +488,9 @@ public class HtmlEx {
                 }
                 if (style[j] instanceof StrikethroughSpan) {
                     out.append("</span>");
+                }
+                if (style[j] instanceof StyleHelper.MarkSpan) {
+                    out.append("</mark>");
                 }
                 if (style[j] instanceof UnderlineSpan) {
                     out.append("</u>");
@@ -524,6 +557,36 @@ public class HtmlEx {
             } else {
                 out.append(c);
             }
+        }
+    }
+
+    private <T> T[] getSpans(Spanned text, int start, int end, Class<T> type) {
+        try {
+            return text.getSpans(start, end, type);
+        } catch (Throwable ex) {
+            Log.e(ex);
+            /*
+                How can this happen?
+                java.lang.ArrayStoreException: android.text.style.SpellCheckSpan cannot be stored in an array of type android.text.style.CharacterStyle[]
+                    at android.text.SpannableStringBuilder.getSpansRec(SpannableStringBuilder.java:979)
+                    at android.text.SpannableStringBuilder.getSpansRec(SpannableStringBuilder.java:946)
+                    at android.text.SpannableStringBuilder.getSpansRec(SpannableStringBuilder.java:983)
+                    at android.text.SpannableStringBuilder.getSpansRec(SpannableStringBuilder.java:946)
+                    at android.text.SpannableStringBuilder.getSpans(SpannableStringBuilder.java:872)
+                    at android.text.SpannableStringBuilder.getSpans(SpannableStringBuilder.java:842)
+                    at androidx.emoji2.text.SpannableBuilder.getSpans(SourceFile:6)
+                    at eu.faircode.email.HtmlEx.withinParagraph(SourceFile:2)
+                    at eu.faircode.email.HtmlEx.withinBlockquoteIndividual(SourceFile:37)
+                    at eu.faircode.email.HtmlEx.withinBlockquote(SourceFile:2)
+                    at eu.faircode.email.HtmlEx.withinDiv(SourceFile:17)
+                    at eu.faircode.email.HtmlEx.withinHtml(SourceFile:2)
+                    at eu.faircode.email.HtmlEx.toHtml(SourceFile:3)
+                    at eu.faircode.email.HtmlHelper.toHtml(SourceFile:2)
+                    at eu.faircode.email.FragmentCompose$54.onExecute(SourceFile:18)
+                    at eu.faircode.email.FragmentCompose$54.onExecute(SourceFile:1)
+                    at eu.faircode.email.SimpleTask$2.run(SourceFile:5)
+             */
+            return (T[]) new Object[0];
         }
     }
 }

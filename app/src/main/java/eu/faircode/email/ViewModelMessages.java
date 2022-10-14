@@ -123,6 +123,7 @@ public class ViewModelMessages extends ViewModel {
                             db.message().pagedUnified(
                                     args.type,
                                     args.threading,
+                                    args.group_category,
                                     args.sort, args.ascending,
                                     args.filter_seen,
                                     args.filter_unflagged,
@@ -182,7 +183,7 @@ public class ViewModelMessages extends ViewModel {
                         builder = new LivePagedListBuilder<>(
                                 db.message().pagedUnified(
                                         null,
-                                        args.threading,
+                                        args.threading, false,
                                         "time", false,
                                         false, false, false, false, false,
                                         null,
@@ -210,6 +211,16 @@ public class ViewModelMessages extends ViewModel {
         }
 
         owner.getLifecycle().addObserver(new LifecycleObserver() {
+            @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+            public void onPaused() {
+                Log.i("Paused model=" + viewType + " last=" + last);
+            }
+
+            @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
+            public void onResumed() {
+                Log.i("Resumed model=" + viewType + " last=" + last);
+            }
+
             @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
             public void onDestroyed() {
                 Log.i("Destroy model=" + viewType);
@@ -271,14 +282,6 @@ public class ViewModelMessages extends ViewModel {
             intf.onFound(-1, 0);
             return;
         }
-
-        ObjectHolder<Boolean> alive = new ObjectHolder<>(true);
-        owner.getLifecycle().addObserver(new LifecycleObserver() {
-            @OnLifecycleEvent(Lifecycle.Event.ON_ANY)
-            public void onAny() {
-                alive.value = owner.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED);
-            }
-        });
 
         Log.i("Observe previous/next id=" + id);
         //model.list.getValue().loadAround(lpos);
@@ -353,6 +356,9 @@ public class ViewModelMessages extends ViewModel {
                         long id = args.getLong("id");
                         int lpos = args.getInt("lpos");
 
+                        if (!isAlive())
+                            return null;
+
                         PagedList<TupleMessageEx> plist = model.list.getValue();
                         if (plist == null)
                             return null;
@@ -371,7 +377,7 @@ public class ViewModelMessages extends ViewModel {
                                     return getPair(plist, ds, count, from + j);
                         }
 
-                        for (int i = 0; i < count && alive.value; i += CHUNK_SIZE) {
+                        for (int i = 0; i < count && isAlive(); i += CHUNK_SIZE) {
                             Log.i("Observe previous/next load" +
                                     " range=" + i + "/#" + count);
                             List<TupleMessageEx> messages = ds.loadRange(i, Math.min(CHUNK_SIZE, count - i));
@@ -448,13 +454,16 @@ public class ViewModelMessages extends ViewModel {
             protected List<Long> onExecute(Context context, Bundle args) {
                 List<Long> ids = new ArrayList<>();
 
+                if (!isAlive())
+                    return ids;
+
                 PagedList<TupleMessageEx> plist = model.list.getValue();
                 if (plist == null)
                     return ids;
 
                 LimitOffsetDataSource<TupleMessageEx> ds = (LimitOffsetDataSource<TupleMessageEx>) plist.getDataSource();
                 int count = ds.countItems();
-                for (int i = 0; i < count; i += 100)
+                for (int i = 0; i < count && isAlive(); i += 100)
                     for (TupleMessageEx message : ds.loadRange(i, Math.min(100, count - i)))
                         if ((message.uid != null && !message.folderReadOnly) ||
                                 message.accountProtocol != EntityAccount.TYPE_IMAP)
@@ -476,6 +485,16 @@ public class ViewModelMessages extends ViewModel {
         }.execute(context, owner, new Bundle(), "model:ids");
     }
 
+    void cleanup() {
+        dump();
+        for (AdapterMessage.ViewType viewType : new ArrayList<>(models.keySet())) {
+            if (viewType != last && !models.get(viewType).list.hasObservers()) {
+                Log.i("Cleanup model viewType=" + viewType);
+                models.remove(viewType);
+            }
+        }
+    }
+
     private class Args {
         private long account;
         private String type;
@@ -486,6 +505,7 @@ public class ViewModelMessages extends ViewModel {
         private boolean server;
 
         private boolean threading;
+        private boolean group_category;
         private String sort;
         private boolean ascending;
         private boolean filter_seen;
@@ -514,9 +534,12 @@ public class ViewModelMessages extends ViewModel {
             this.criteria = criteria;
             this.server = server;
 
+            boolean outbox = EntityFolder.OUTBOX.equals(type);
+
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+            this.group_category = prefs.getBoolean("group_category", false);
             this.sort = prefs.getString(FragmentMessages.getSort(context, viewType, type), "time");
-            this.ascending = prefs.getBoolean(FragmentMessages.getSortOrder(context, viewType, type), false);
+            this.ascending = prefs.getBoolean(FragmentMessages.getSortOrder(context, viewType, type), outbox);
             this.filter_seen = prefs.getBoolean(FragmentMessages.getFilter(context, "seen", viewType, type), false);
             this.filter_unflagged = prefs.getBoolean(FragmentMessages.getFilter(context, "unflagged", viewType, type), false);
             this.filter_unknown = prefs.getBoolean(FragmentMessages.getFilter(context, "unknown", viewType, type), false);
@@ -543,6 +566,7 @@ public class ViewModelMessages extends ViewModel {
                         this.server == other.server &&
 
                         this.threading == other.threading &&
+                        this.group_category == other.group_category &&
                         Objects.equals(this.sort, other.sort) &&
                         this.ascending == other.ascending &&
                         this.filter_seen == other.filter_seen &&
@@ -564,6 +588,7 @@ public class ViewModelMessages extends ViewModel {
                     " thread=" + thread + ":" + id +
                     " criteria=" + criteria + ":" + server + "" +
                     " threading=" + threading +
+                    " category=" + group_category +
                     " sort=" + sort + ":" + ascending +
                     " filter seen=" + filter_seen +
                     " unflagged=" + filter_unflagged +
@@ -600,7 +625,10 @@ public class ViewModelMessages extends ViewModel {
                 owner.getLifecycle().addObserver(new LifecycleObserver() {
                     @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
                     public void onDestroyed() {
-                        boundary.destroy(state);
+                        if (boundary != null) {
+                            boundary.destroy(state);
+                            boundary = null;
+                        }
                         owner.getLifecycle().removeObserver(this);
                     }
                 });

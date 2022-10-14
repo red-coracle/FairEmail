@@ -19,6 +19,8 @@ package eu.faircode.email;
     Copyright 2018-2022 by Marcel Bokhorst (M66B)
 */
 
+import static androidx.browser.customtabs.CustomTabsService.ACTION_CUSTOM_TABS_CONNECTION;
+
 import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
@@ -27,8 +29,12 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.content.res.Resources;
 import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -45,12 +51,17 @@ import android.util.Pair;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -58,6 +69,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.constraintlayout.widget.Group;
+import androidx.core.content.ContextCompat;
 import androidx.core.net.MailTo;
 import androidx.core.util.PatternsCompat;
 import androidx.lifecycle.Lifecycle;
@@ -66,11 +78,14 @@ import androidx.preference.PreferenceManager;
 
 import java.net.IDN;
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class FragmentDialogOpenLink extends FragmentDialogBase {
+    private ScrollView scroll;
     private ImageButton ibMore;
     private TextView tvMore;
     private Button btnOwner;
@@ -119,12 +134,33 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
             String t = title.replaceAll("\\s+", "");
             Uri u = Uri.parse(title.contains("://") ? t : "http://" + t);
             String host = u.getHost(); // Capture1.PNG
-            uriTitle = (UriHelper.hasParentDomain(context, host) ? u : null);
+            uriTitle = (UriHelper.hasTld(context, host) ? u : null);
         } else
             uriTitle = null;
 
+        MailTo mailto = null;
+        if ("mailto".equals(uri.getScheme()))
+            try {
+                mailto = MailTo.parse(uri);
+            } catch (Throwable ex) {
+                Log.w(ex);
+            }
+
+        String host = uri.getHost();
+        String thost = (uriTitle == null ? null : uriTitle.getHost());
+
+        String puny = null;
+        try {
+            if (host != null)
+                puny = IDN.toASCII(host, IDN.ALLOW_UNASSIGNED);
+        } catch (Throwable ex) {
+            Log.i(ex);
+            puny = host;
+        }
+
         // Get views
         final View dview = LayoutInflater.from(context).inflate(R.layout.dialog_open_link, null);
+        scroll = dview.findViewById(R.id.scroll);
         final ImageButton ibInfo = dview.findViewById(R.id.ibInfo);
         final TextView tvTitle = dview.findViewById(R.id.tvTitle);
         final ImageButton ibDifferent = dview.findViewById(R.id.ibDifferent);
@@ -139,6 +175,7 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
         final CheckBox cbSecure = dview.findViewById(R.id.cbSecure);
         final CheckBox cbSanitize = dview.findViewById(R.id.cbSanitize);
         final CheckBox cbNotAgain = dview.findViewById(R.id.cbNotAgain);
+        final Spinner spOpenWith = dview.findViewById(R.id.spOpenWith);
 
         ibMore = dview.findViewById(R.id.ibMore);
         tvMore = dview.findViewById(R.id.tvMore);
@@ -152,6 +189,7 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
         btnDefault = dview.findViewById(R.id.btnDefault);
         tvReset = dview.findViewById(R.id.tvReset);
 
+        final Group grpOpenWith = dview.findViewById(R.id.grpOpenWith);
         final Group grpDifferent = dview.findViewById(R.id.grpDifferent);
 
         // Wire
@@ -159,14 +197,17 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
         ibInfo.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Helper.viewFAQ(v.getContext(), 35);
+                Helper.viewFAQ(v.getContext(), 182);
             }
         });
 
         ibDifferent.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                etLink.setText(format(uriTitle, context));
+                Package pkg = (Package) spOpenWith.getSelectedItem();
+                Log.i("Open title uri=" + uri + " with=" + pkg);
+                boolean tabs = (pkg != null && pkg.tabs);
+                Helper.view(context, uriTitle, !tabs, !tabs);
             }
         });
 
@@ -181,6 +222,9 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
 
             @Override
             public void afterTextChanged(Editable editable) {
+                if (cbSecure == null)
+                    return;
+
                 Uri uri = Uri.parse(editable.toString());
 
                 boolean secure = UriHelper.isSecure(uri);
@@ -213,16 +257,6 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
             }
         });
 
-        MailTo mailto = null;
-        if ("mailto".equals(uri.getScheme()))
-            try {
-                mailto = MailTo.parse(uri);
-            } catch (Throwable ex) {
-                Log.w(ex);
-            }
-        ibSearch.setVisibility(
-                mailto != null && !TextUtils.isEmpty(mailto.getTo())
-                        ? View.VISIBLE : View.GONE);
         ibSearch.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -251,15 +285,15 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
         ibCopy.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                ClipboardManager clipboard =
-                        (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipboardManager clipboard = Helper.getSystemService(context, ClipboardManager.class);
                 if (clipboard == null)
                     return;
 
                 ClipData clip = ClipData.newPlainText(title, etLink.getText().toString());
                 clipboard.setPrimaryClip(clip);
 
-                ToastEx.makeText(context, R.string.title_clipboard_copied, Toast.LENGTH_LONG).show();
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU)
+                    ToastEx.makeText(context, R.string.title_clipboard_copied, Toast.LENGTH_LONG).show();
             }
         });
 
@@ -292,6 +326,25 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 prefs.edit().putBoolean(uri.getHost() + ".confirm_link", !isChecked).apply();
+            }
+        });
+
+        spOpenWith.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                Package pkg = (Package) parent.getAdapter().getItem(position);
+                prefs.edit()
+                        .putString("open_with_pkg", pkg.name)
+                        .putBoolean("open_with_tabs", pkg.tabs)
+                        .apply();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                prefs.edit()
+                        .remove("open_with_pkg")
+                        .remove("open_with_tabs")
+                        .apply();
             }
         });
 
@@ -391,17 +444,9 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
         tvTitle.setText(title);
         tvTitle.setVisibility(TextUtils.isEmpty(title) ? View.GONE : View.VISIBLE);
 
-        String host = uri.getHost();
-        String thost = (uriTitle == null ? null : uriTitle.getHost());
-
-        String puny = null;
-        try {
-            if (host != null)
-                puny = IDN.toASCII(host, IDN.ALLOW_UNASSIGNED);
-        } catch (Throwable ex) {
-            Log.i(ex);
-            puny = host;
-        }
+        ibSearch.setVisibility(
+                mailto != null && !TextUtils.isEmpty(mailto.getTo())
+                        ? View.VISIBLE : View.GONE);
 
         if (host != null && !host.equals(puny)) {
             etLink.setText(format(uri.buildUpon().encodedAuthority(puny).build(), context));
@@ -454,18 +499,158 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
 
         cbNotAgain.setText(context.getString(R.string.title_no_ask_for_again, uri.getHost()));
         cbNotAgain.setVisibility(
-                "https".equals(uri.getScheme()) && !TextUtils.isEmpty(uri.getHost())
+                UriHelper.isSecure(uri) && !TextUtils.isEmpty(uri.getHost())
                         ? View.VISIBLE : View.GONE);
 
         setMore(false);
 
+        if (UriHelper.isHyperLink(uri)) {
+            Bundle args = new Bundle();
+            args.putParcelable("uri", uri);
+
+            new SimpleTask<List<Package>>() {
+                @Override
+                protected List<Package> onExecute(Context context, Bundle args) throws Throwable {
+                    Uri uri = args.getParcelable("uri");
+
+                    List<Package> pkgs = new ArrayList<>();
+                    int dp24 = Helper.dp2pixels(context, 24);
+                    if (UriHelper.isHyperLink(uri)) {
+                        try {
+                            PackageManager pm = context.getPackageManager();
+                            Intent intent = new Intent(Intent.ACTION_VIEW)
+                                    .addCategory(Intent.CATEGORY_BROWSABLE)
+                                    .setData(UriHelper.fix(uri));
+
+                            ResolveInfo main = pm.resolveActivity(intent, 0);
+                            if (main != null) {
+                                Log.i("Open with main=" + main.activityInfo.packageName);
+                                args.putString("main", main.activityInfo.packageName);
+                            }
+
+                            int flags = (Build.VERSION.SDK_INT < Build.VERSION_CODES.M ? 0 : PackageManager.MATCH_ALL);
+                            List<ResolveInfo> ris = pm.queryIntentActivities(intent, flags);
+                            for (ResolveInfo ri : ris) {
+                                Resources res = pm.getResourcesForApplication(ri.activityInfo.applicationInfo);
+                                Drawable icon;
+                                try {
+                                    icon = res.getDrawable(ri.activityInfo.applicationInfo.icon);
+                                    // Maximum size = 192x192
+                                    if (icon != null &&
+                                            (icon.getIntrinsicWidth() > 256 || icon.getIntrinsicHeight() > 256))
+                                        icon = null;
+                                } catch (Throwable ex) {
+                                    Log.w(ex);
+                                    icon = null;
+                                }
+                                CharSequence label;
+                                try {
+                                    if (ri.activityInfo.applicationInfo.labelRes == 0)
+                                        label = null;
+                                    else
+                                        label = res.getString(ri.activityInfo.applicationInfo.labelRes);
+                                    if (label == null)
+                                        Log.w("Missing label" +
+                                                " pkg=" + ri.activityInfo.packageName +
+                                                " res=" + ri.activityInfo.applicationInfo.labelRes);
+                                } catch (Throwable ex) {
+                                    Log.w(ex);
+                                    label = null;
+                                }
+                                if (icon != null)
+                                    icon.setBounds(0, 0, dp24, dp24);
+                                pkgs.add(new Package(
+                                        icon,
+                                        label,
+                                        ri.activityInfo.packageName,
+                                        false,
+                                        ri.activityInfo.applicationInfo.enabled));
+
+                                try {
+                                    Intent serviceIntent = new Intent();
+                                    serviceIntent.setAction(ACTION_CUSTOM_TABS_CONNECTION);
+                                    serviceIntent.setPackage(ri.activityInfo.packageName);
+                                    boolean tabs = (pm.resolveService(serviceIntent, 0) != null);
+                                    Log.i("Open with pkg=" + ri.activityInfo.packageName + " tabs=" + tabs);
+                                    if (tabs)
+                                        pkgs.add(new Package(
+                                                icon,
+                                                label,
+                                                ri.activityInfo.packageName,
+                                                true,
+                                                ri.activityInfo.applicationInfo.enabled));
+                                } catch (Throwable ex) {
+                                    Log.e(ex);
+                                }
+                            }
+                        } catch (Throwable ex) {
+                            Log.e(ex);
+                        }
+                    }
+
+                    Drawable android = ContextCompat.getDrawable(context, R.drawable.android_robot);
+                    android.setBounds(0, 0, dp24, dp24);
+                    pkgs.add(new Package(
+                            android,
+                            context.getString(R.string.title_select_app),
+                            "chooser",
+                            false,
+                            true));
+                    pkgs.add(new Package(
+                            android,
+                            context.getString(R.string.title_select_app),
+                            "chooser",
+                            true,
+                            true));
+
+                    return pkgs;
+                }
+
+                @Override
+                protected void onExecuted(Bundle args, List<Package> pkgs) {
+                    AdapterPackage adapter = new AdapterPackage(getContext(), pkgs);
+                    spOpenWith.setAdapter(adapter);
+
+                    String main = args.getString("main", null);
+                    String open_with_pkg = prefs.getString("open_with_pkg", null);
+                    boolean open_with_tabs = prefs.getBoolean("open_with_tabs", true);
+                    Log.i("Open with selected=" + open_with_pkg + " tabs=" + open_with_tabs);
+                    for (int position = 0; position < pkgs.size(); position++) {
+                        Package pkg = pkgs.get(position);
+                        if (Objects.equals(pkg.name, open_with_pkg) && pkg.tabs == open_with_tabs) {
+                            spOpenWith.setSelection(position);
+                            break;
+                        }
+                        if (Objects.equals(main, pkg.name))
+                            spOpenWith.setSelection(position);
+                    }
+                }
+
+                @Override
+                protected void onException(Bundle args, Throwable ex) {
+                    Log.unexpectedError(getParentFragmentManager(), ex);
+                }
+            }.execute(this, args, "open:package");
+        } else
+            grpOpenWith.setVisibility(View.GONE);
+
+        Log.i("Open link dialog uri=" + uri);
         return new AlertDialog.Builder(context)
                 .setView(dview)
                 .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         Uri uri = Uri.parse(etLink.getText().toString());
-                        Helper.view(context, uri, false);
+                        Package pkg = (Package) spOpenWith.getSelectedItem();
+                        Log.i("Open link uri=" + uri + " with=" + pkg);
+                        boolean tabs = (pkg != null && pkg.tabs);
+                        Helper.view(context, uri, !tabs, !tabs);
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        Log.i("Open link cancelled");
                     }
                 })
                 .setNeutralButton(R.string.title_browse, new DialogInterface.OnClickListener() {
@@ -473,7 +658,8 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
                     public void onClick(DialogInterface dialog, int which) {
                         // https://developer.android.com/training/basics/intents/sending#AppChooser
                         Uri uri = Uri.parse(etLink.getText().toString());
-                        Intent view = new Intent(Intent.ACTION_VIEW, uri);
+                        Log.i("Open link with uri=" + uri);
+                        Intent view = new Intent(Intent.ACTION_VIEW, UriHelper.fix(uri));
                         Intent chooser = Intent.createChooser(view, context.getString(R.string.title_select_app));
                         try {
                             startActivity(chooser);
@@ -483,7 +669,6 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
                         }
                     }
                 })
-                .setNegativeButton(android.R.string.cancel, null)
                 .create();
     }
 
@@ -497,6 +682,16 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
         btnSettings.setVisibility(show ? View.VISIBLE : View.GONE);
         btnDefault.setVisibility(show && n ? View.VISIBLE : View.GONE);
         tvReset.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (show)
+            scroll.post(new RunnableEx("link:scroll#1") {
+                public void delegate() {
+                    scroll.getChildAt(0).post(new RunnableEx("link:scroll#2") {
+                        public void delegate() {
+                            scroll.scrollTo(0, scroll.getBottom());
+                        }
+                    });
+                }
+            });
     }
 
     private Spanned format(Uri uri, Context context) {
@@ -524,7 +719,7 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
             if (scheme != null) {
                 int index = text.indexOf(scheme);
                 if (index >= 0)
-                    if ("http".equals(scheme)) {
+                    if ("http".equalsIgnoreCase(scheme)) {
                         ssb.setSpan(new ForegroundColorSpan(colorWarning),
                                 index, index + scheme.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                         ssb.setSpan(new StyleSpan(Typeface.BOLD),
@@ -555,5 +750,74 @@ public class FragmentDialogOpenLink extends FragmentDialogBase {
         }
 
         return ssb;
+    }
+
+    private static class Package {
+        private Drawable icon;
+        private CharSequence title;
+        private String name;
+        private boolean tabs;
+        private boolean enabled;
+
+        public Package(Drawable icon, CharSequence title, String name, boolean tabs, boolean enabled) {
+            this.icon = icon;
+            this.title = title;
+            this.name = name;
+            this.tabs = tabs;
+            this.enabled = enabled;
+        }
+
+        @Override
+        public String toString() {
+            return name + ":" + tabs;
+        }
+    }
+
+    public static class AdapterPackage extends ArrayAdapter<Package> {
+        private final Context context;
+        private final List<Package> pkgs;
+        private final Drawable external;
+        private final Drawable browser;
+
+        AdapterPackage(@NonNull Context context, List<Package> pkgs) {
+            super(context, 0, pkgs);
+            this.context = context;
+            this.pkgs = pkgs;
+            this.external = ContextCompat.getDrawable(context, R.drawable.twotone_open_in_new_24);
+            if (external != null)
+                external.setBounds(0, 0, external.getIntrinsicWidth(), external.getIntrinsicHeight());
+            this.browser = ContextCompat.getDrawable(context, R.drawable.twotone_language_24);
+            if (browser != null)
+                browser.setBounds(0, 0, browser.getIntrinsicWidth(), browser.getIntrinsicHeight());
+        }
+
+        @NonNull
+        @Override
+        public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+            return getLayout(position, convertView, parent, R.layout.spinner_package);
+        }
+
+        @Override
+        public View getDropDownView(int position, View convertView, @NonNull ViewGroup parent) {
+            return getLayout(position, convertView, parent, R.layout.spinner_package);
+        }
+
+        private View getLayout(int position, View convertView, ViewGroup parent, int resid) {
+            View view = LayoutInflater.from(context).inflate(resid, parent, false);
+            TextView text1 = view.findViewById(android.R.id.text1);
+
+            Package pkg = pkgs.get(position);
+            if (pkg != null) {
+                view.setAlpha(pkg.enabled ? 1f : Helper.LOW_LIGHT);
+                text1.setText(pkg.title == null ? pkg.name : pkg.title.toString());
+                text1.setCompoundDrawablesRelative(
+                        pkg.icon == null ? browser : pkg.icon,
+                        null,
+                        pkg.tabs ? null : external,
+                        null);
+            }
+
+            return view;
+        }
     }
 }

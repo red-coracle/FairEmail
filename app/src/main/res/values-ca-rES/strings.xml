@@ -8,7 +8,6 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="app_exit">Premeu «Enrere» novament per sortir</string>
     <string name="app_cake">Espai d’emmagatzematge insuficient</string>
     <string name="app_updated">Darrera actualització: %1$s</string>
-    <string name="channel_service">Rebre</string>
     <string name="channel_send">Enviar</string>
     <string name="channel_notification">Correu electrònic</string>
     <string name="channel_progress">Progrés</string>
@@ -105,7 +104,6 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_setup_help">Ajuda</string>
     <string name="title_setup_quick">Configuració ràpida</string>
     <string name="title_setup_issue">FairEmail va néixer per ajudar-nos a protegir la nostra privacitat y representa literalment milers d\'hores de treball. Si teniu qualsevol problema, si us plau, contacteu amb mi primer demanant suport abans de deixar un comentari negatiu. Sóc feliç ajudant!</string>
-    <string name="title_setup_quick_hint">La configuració ràpida aconseguirà informació de configuració a autoconfig.thunderbird.net</string>
     <string name="title_setup_quick_imap">Servidor IMAP per rebre missatges</string>
     <string name="title_setup_quick_smtp">Servidor SMTP per enviar missatges</string>
     <string name="title_setup_wizard">Assistent</string>
@@ -118,7 +116,6 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_setup_pop3">Compte POP3</string>
     <string name="title_setup_gmail_rationale">Doneu permís per seleccionar un compte i llegir el vostre nom</string>
     <string name="title_setup_gmail_permissions">Google sol·licitarà permisos per llegir, compondre, enviar i suprimir tot el vostre correu electrònic. FairEmail mai suprimirà els vostres missatges sense el vostre consentiment explícit.</string>
-    <string name="title_setup_gmail_drafts">Si IMAP no pot accedir a la carpeta d\'esborranys, es pot solucionar a la configuració de l\'etiqueta de Gmail</string>
     <string name="title_setup_office_auth">L\'error \"AUTHENTICATE failed\" es pot produir perquè l\'administrador del sistema hagi deshabilitat IMAP/SMTP</string>
     <string name="title_setup_oauth_rationale">Autoritza accés al seu compte %1$s</string>
     <string name="title_setup_oauth_authorize">Autoritzar</string>
@@ -219,6 +216,8 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_advanced_suggest_frequently">Ordena les adreces suggerides en funció de la freqüència d’ús</string>
     <string name="title_advanced_send_reminders">Mostra els recordatoris</string>
     <string name="title_advanced_send_delayed">Retarda l\'enviament de missatges</string>
+    <string name="title_advanced_auto_save_paragraph">Guardar el borrador automáticamente después de cada párrafo</string>
+    <string name="title_advanced_auto_save_dot">Guardar el borrador automáticamente después de cada frase</string>
     <string name="title_advanced_compose_font">Tipus de lletra per defecte</string>
     <string name="title_advanced_prefix_once">El prefix de l\'assumpte només una vegada a la resposta o al reenviament</string>
     <string name="title_advanced_extended_reply">Utilitza resposta estesa/capçalera de reenviament</string>
@@ -320,8 +319,6 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_advanced_reset_importance">Restablir la importància per moure missatges</string>
     <string name="title_advanced_notifications">Gestiona les notificacions</string>
     <string name="title_advanced_notifications_default">Canal per defecte</string>
-    <string name="title_advanced_notifications_background">Utilitzeu el servei en segon pla per sincronitzar els missatges</string>
-    <string name="title_advanced_notifications_background_hint">Android pot aturar un servei de fons en qualsevol moment, però no requereix una notificació de la barra d\'estat</string>
     <string name="title_advanced_badge">Mostra la icona del llançador amb nombre de missatges nous</string>
     <string name="title_advanced_unseen_ignored">Permet que el nombre de missatges nous coincideixi amb el nombre de notificacions</string>
     <string name="title_advanced_notify_known">Mostra notificacions només per a contactes</string>
@@ -347,8 +344,9 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_advanced_biometrics_notify">Mostra el contingut de notificacions quan utilitzeu l\'autenticació biomètrica</string>
     <string name="title_advanced_light">Utilitza el led de notificacions</string>
     <string name="title_advanced_sound">Selecciona so de notificació</string>
+    <string name="title_advanced_notifications_background">Utilitzeu el servei en segon pla per sincronitzar els missatges</string>
+    <string name="title_advanced_notifications_background_hint">Android pot aturar un servei de fons en qualsevol moment, però no requereix una notificació de la barra d\'estat</string>
     <string name="title_advanced_confirm_links">Confirmeu l’obertura d’enllaços</string>
-    <string name="title_advanced_browse_links">Delega obrir enllaços a Android</string>
     <string name="title_advanced_ask_images">Confirmeu la visualització d’imatges</string>
     <string name="title_advanced_confirm_html">Mostra els missatges reformatats de manera predeterminada</string>
     <string name="title_advanced_hide_timezone">Envia missatges sense dades de fus horari</string>
@@ -408,7 +406,7 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_advanced_navbar_colorize_hint">Si això funciona depèn de la versió i la versió d\'Android</string>
     <string name="title_advanced_threading_hint">Agrupa missatges relacionats entre ells</string>
     <string name="title_advanced_highlight_hint">El color de l’accent del tema s’utilitzarà per ressaltar</string>
-    <string name="title_advanced_gravatars_hint">Pot haver-hi un risc de privadesa</string>
+    <string name="title_advanced_privacy_risk">Pot haver-hi un risc de privadesa</string>
     <string name="title_advanced_preview_hint">Només disponible quan s\'ha descarregat el text del missatge</string>
     <string name="title_advanced_preview_issue">El desplaçament pot ser lent a causa d\'un error en algunes versions d\'Android quan el nombre de línies és superior a una</string>
     <string name="title_advanced_inline_hint">Les imatges en línia són imatges incloses al missatge</string>
@@ -470,7 +468,6 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_custom">Personalitzat</string>
     <string name="title_host">Nom del servidor</string>
     <string name="title_encryption">Xifratge</string>
-    <string name="title_encryption_none">Cap</string>
     <string name="title_allow_insecure">Permet connexions no segures</string>
     <string name="title_insecure_remark">Les connexions insegures només s’han de permetre en xarxes de confiança i mai en xarxes públiques</string>
     <string name="title_port">Número de port</string>
@@ -509,7 +506,6 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_sign_key">Clau signada: %1$s</string>
     <string name="title_last_connected">Darrera connexió: %1$s</string>
     <string name="title_storage_quota">Ús de l’emmagatzematge del servidor: %1$s/%2$s</string>
-    <string name="title_pop_support">El protocol POP3 només permet descarregar i esborrar missatges de la safata d\'entrada. No deixa marcar missatges com a llegits, moure missatges, etc. Com que POP3 també necessita més bateria i dades, pot ser preferible utilitzar el protocol IMAP.</string>
     <string name="title_oauth_support">OAuth no està suportat</string>
     <string name="title_review">Revisa</string>
     <string name="title_hint_alias">Premuda llarga per a opcions com ara copiar per crear noves àlies d\'identitats</string>
@@ -532,12 +528,13 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_delete_channel">Esborra un canal de notificació</string>
     <string name="title_insert_contact">Afegeix el contacte</string>
     <string name="title_edit_contact">Edita el contacte</string>
+    <string name="title_contact_email">Correu electrònic</string>
+    <string name="title_contact_name">Nom</string>
     <string name="title_create_sub_folder">Crea una nova carpeta</string>
     <string name="title_empty_trash_ask">Voleu eliminar tots els missatges de la paperera definitivament?</string>
     <string name="title_empty_spam_ask">Voleu eliminar tots els missatges de correu brossa definitivament?</string>
     <string name="title_empty_trash_all_ask">Voleu eliminar tots els missatges de la paperera de tots els comptes definitivament?</string>
     <string name="title_empty_spam_all_ask">Voleu eliminar tots els missatges de correu brossa de tots els comptes definitivament?</string>
-    <string name="title_delete_contacts">Esborrar tots els contactes locals?</string>
     <string name="title_no_operations">Sense operacions pendents</string>
     <string name="title_hint_operations">Les operacions d\'esborrar poden provocar la desaparició de missatges i problemes de sincronització</string>
     <string name="title_folder_name">Nom de carpeta</string>
@@ -621,6 +618,7 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_download_all">Baixa-ho tot</string>
     <string name="title_save_all">Desa-ho tot</string>
     <string name="title_save_eml">Descarregueu el fitxer del missatge en brut</string>
+    <string name="title_quick_actions_snooze">Posposa</string>
     <string name="title_trash">Paperera</string>
     <string name="title_copy">S\'està copiant &#8230;</string>
     <string name="title_copy_to">Copiar a &#8230;</string>
@@ -648,7 +646,6 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_reply_receipt">Enviar confirmació de lectura</string>
     <string name="title_reply_template">Respondre amb una plantilla</string>
     <string name="title_move_undo">Movent a %1$s (%2$d)</string>
-    <string name="title_open_with">Obre amb</string>
     <string name="title_authentication_failed">%1$s autenticació ha fallat</string>
     <string name="title_receipt_subject">Avisos de recepció: %1$s</string>
     <string name="title_receipt_text">Aquest rebut de lectura només reconeix que el missatge es va mostrar. No hi ha garantia que el destinatari hagi llegit el contingut del missatge.</string>
@@ -656,7 +653,6 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_no_recorder">No hi ha disponible cap aplicació de gravadora d’àudio adequada</string>
     <string name="title_no_camera">No hi ha disponible cap aplicació de càmera adequada</string>
     <string name="title_no_saf">Marc d\'accés d\'emmagatzematge no disponible</string>
-    <string name="title_no_stream">Una aplicació obsoleta enviava una ruta del fitxer en lloc d’un flux de fitxers</string>
     <string name="title_no_internet">Cap connexió a Internet adequada</string>
     <string name="title_no_connection">Connectat a un o més comptes &#8230;</string>
     <string name="title_no_folder">La carpeta no existeix</string>
@@ -824,6 +820,10 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_search_device">Cerca al dispositiu</string>
     <string name="title_search_server">Cerca en el servidor remot</string>
     <string name="title_search_in">Cerca en</string>
+    <string name="title_search_sender">Cerca correu</string>
+    <string name="title_save_search_name">Nom</string>
+    <string name="title_save_search_order">Ordre</string>
+    <string name="title_save_search_color">Color</string>
     <string name="title_sort_on">Ordena per</string>
     <string name="title_sort_on_time">Data</string>
     <string name="title_sort_on_unread">Sense llegir</string>
@@ -856,6 +856,7 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_edit_signature">Edita la signatura</string>
     <string name="title_edit_signature_text">Text de signatura</string>
     <string name="title_edit_signature_image">Insereix imatge</string>
+    <string name="title_answer_define_name">Nom</string>
     <string name="title_answer_caption">Editar la plantilla</string>
     <string name="title_answer_reply">Respondre plantilla</string>
     <string name="title_answer_name">Nom de la plantilla</string>
@@ -1097,7 +1098,6 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string name="title_boundary_retry">Prova de nou</string>
     <string name="title_unexpected_error">S\'ha produït un error inesperat</string>
     <string name="title_log">Registres</string>
-    <string name="title_auto_scroll">Desplaçament automàtic</string>
     <string name="title_log_clear">Netejar</string>
     <string name="title_rules_export">Exporta regles</string>
     <string name="title_rules_import">Importa regles</string>
@@ -1151,6 +1151,7 @@ Ambdues opcions es poden desactivar si es desitja.</string>
     <string-array name="pollIntervalNames">
         <item>Sempre</item>
         <item>Cada 5 minuts</item>
+        <item>Cada 10 minuts</item>
         <item>Cada 15 minuts</item>
         <item>Cada 30 minuts</item>
         <item>Cada hora</item>
@@ -1194,6 +1195,7 @@ Ambdues opcions es poden desactivar si es desitja.</string>
         <item>Següent conversa</item>
     </string-array>
     <string-array name="resizeNames">
+        <item>Tiny</item>
         <item>Extra small</item>
         <item>Petit</item>
         <item>Mitjà</item>
@@ -1286,5 +1288,18 @@ Ambdues opcions es poden desactivar si es desitja.</string>
         <item>Mitjà</item>
         <item>Gran</item>
         <item>Extra gran</item>
+    </string-array>
+    <string-array name="contactTypes">
+        <item>Destinatari</item>
+        <item>Remitent</item>
+        <item>Bloquejat</item>
+        <item>Not blocked</item>
+    </string-array>
+    <string-array name="contactGroupTypes">
+        <item>Any</item>
+        <item>Home</item>
+        <item>Feina</item>
+        <item>Altres</item>
+        <item>Mobile</item>
     </string-array>
 </resources>

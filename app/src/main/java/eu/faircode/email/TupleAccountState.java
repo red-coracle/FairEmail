@@ -19,8 +19,6 @@ package eu.faircode.email;
     Copyright 2018-2022 by Marcel Bokhorst (M66B)
 */
 
-import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_PASSWORD;
-
 import java.util.Objects;
 
 public class TupleAccountState extends EntityAccount {
@@ -37,7 +35,8 @@ public class TupleAccountState extends EntityAccount {
                     this.insecure.equals(other.insecure) &&
                     this.port.equals(other.port) &&
                     this.user.equals(other.user) &&
-                    (auth_type != AUTH_TYPE_PASSWORD || this.password.equals(other.password)) &&
+                    Objects.equals(this.auth_type, other.auth_type) &&
+                    this.password.equals(other.password) &&
                     Objects.equals(this.certificate_alias, other.certificate_alias) &&
                     Objects.equals(this.realm, other.realm) &&
                     Objects.equals(this.fingerprint, other.fingerprint) &&
@@ -50,6 +49,7 @@ public class TupleAccountState extends EntityAccount {
                     this.ignore_size.equals(other.ignore_size) &&
                     this.use_date.equals(other.use_date) &&
                     this.use_received.equals(other.use_received) &&
+                    Objects.equals(this.conditions, other.conditions) &&
                     this.folders == other.folders &&
                     Objects.equals(this.tbd, other.tbd));
         } else

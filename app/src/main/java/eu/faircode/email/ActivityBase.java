@@ -38,6 +38,7 @@ import android.os.PowerManager;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.view.KeyEvent;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
@@ -47,22 +48,24 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 import androidx.core.graphics.ColorUtils;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentResultListener;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.OnLifecycleEvent;
 import androidx.preference.PreferenceManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.lang.reflect.Field;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -70,6 +73,7 @@ import java.util.List;
 import java.util.Map;
 
 abstract class ActivityBase extends AppCompatActivity implements SharedPreferences.OnSharedPreferenceChangeListener {
+    private int themeId;
     private Context originalContext;
     private boolean visible;
     private boolean contacts;
@@ -106,7 +110,8 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
 
         if (!this.getClass().equals(ActivityMain.class)) {
-            setTheme(FragmentDialogTheme.getTheme(this));
+            themeId = FragmentDialogTheme.getTheme(this);
+            setTheme(themeId);
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 boolean dark = Helper.isDarkTheme(this);
@@ -118,6 +123,30 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
                 view.setSystemUiVisibility(flags);
             }
         }
+
+        String requestKey = getRequestKey();
+        if (!BuildConfig.PLAY_STORE_RELEASE)
+            EntityLog.log(this, "Listening key=" + requestKey);
+        getSupportFragmentManager().setFragmentResultListener(requestKey, this, new FragmentResultListener() {
+            @Override
+            public void onFragmentResult(@NonNull String requestKey, @NonNull Bundle result) {
+                try {
+                    result.setClassLoader(ApplicationEx.class.getClassLoader());
+                    int requestCode = result.getInt("requestCode");
+                    int resultCode = result.getInt("resultCode");
+
+                    EntityLog.log(ActivityBase.this, "Received key=" + requestKey +
+                            " request=" + requestCode +
+                            " result=" + resultCode);
+
+                    Intent data = new Intent();
+                    data.putExtra("args", result);
+                    onActivityResult(requestCode, resultCode, data);
+                } catch (Throwable ex) {
+                    Log.e(ex);
+                }
+            }
+        });
 
         prefs.registerOnSharedPreferenceChangeListener(this);
 
@@ -223,7 +252,6 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
         crumb.put("name", this.getClass().getName());
         crumb.put("before", Integer.toString(before));
         crumb.put("after", Integer.toString(after));
-        crumb.put("free", Integer.toString(Log.getFreeMemMb()));
         Log.breadcrumb("onSaveInstanceState", crumb);
 
         for (String key : outState.keySet())
@@ -236,6 +264,11 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
         super.onResume();
 
         visible = true;
+
+        if (!(this instanceof ActivityMain)) {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+            prefs.edit().putString("last_activity", this.getClass().getName()).apply();
+        }
 
         boolean contacts = hasPermission(Manifest.permission.READ_CONTACTS);
         if (this.contacts != contacts &&
@@ -256,6 +289,37 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
         visible = false;
 
         checkAuthentication(false);
+    }
+
+    @Override
+    public boolean onPreparePanel(int featureId, @Nullable View view, @NonNull Menu menu) {
+        try {
+            return super.onPreparePanel(featureId, view, menu);
+        } catch (Throwable ex) {
+            /*
+                This should never happen, but ...
+                java.lang.NullPointerException: Attempt to invoke interface method 'android.view.MenuItem android.view.MenuItem.setEnabled(boolean)' on a null object reference
+                    at eu.faircode.email.FragmentCompose.onPrepareOptionsMenu(SourceFile:3)
+                    at androidx.fragment.app.Fragment.performPrepareOptionsMenu(SourceFile:3)
+                    at androidx.fragment.app.FragmentManager.dispatchPrepareOptionsMenu(SourceFile:3)
+                    at androidx.fragment.app.FragmentManager$2.onPrepareMenu(Unknown Source:2)
+                    at androidx.core.view.MenuHostHelper.onPrepareMenu(SourceFile:2)
+                    at androidx.activity.ComponentActivity.onPrepareOptionsMenu(SourceFile:2)
+                    at android.app.Activity.onPreparePanel(Activity.java:3391)
+                    at androidx.appcompat.view.WindowCallbackWrapper.onPreparePanel(Unknown Source:2)
+                    at androidx.appcompat.app.AppCompatDelegateImpl$AppCompatWindowCallback.onPreparePanel(SourceFile:4)
+                    at androidx.appcompat.app.AppCompatDelegateImpl.preparePanel(SourceFile:28)
+                    at androidx.appcompat.app.AppCompatDelegateImpl.doInvalidatePanelMenu(SourceFile:14)
+                    at androidx.appcompat.app.AppCompatDelegateImpl$2.run(SourceFile:2)
+                    at android.view.Choreographer$CallbackRecord.run(Choreographer.java:948)
+                    at android.view.Choreographer.doCallbacks(Choreographer.java:750)
+                    at android.view.Choreographer.doFrame(Choreographer.java:679)
+                    at android.view.Choreographer$FrameDisplayEventReceiver.run(Choreographer.java:934)
+                    at android.os.Handler.handleCallback(Handler.java:869)
+             */
+            Log.e(ex);
+            return false;
+        }
     }
 
     @Override
@@ -294,7 +358,9 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
         Log.i("Destroy " + this.getClass().getName());
         PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(this);
         try {
+            getSupportFragmentManager().unregisterFragmentLifecycleCallbacks(lifecycleCallbacks);
             super.onDestroy();
+            originalContext = null;
         } catch (Throwable ex) {
             Log.w(ex);
             /*
@@ -353,6 +419,14 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
         }
     }
 
+    public int getThemeId() {
+        return this.themeId;
+    }
+
+    public String getRequestKey() {
+        return this.getClass().getName() + ":activity";
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         EntityLog.log(this, "Result class=" + this.getClass().getSimpleName() +
@@ -406,7 +480,8 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
                 else {
                     ArrayList<Uri> processed = new ArrayList<>();
                     for (Uri uri : uris)
-                        processed.add(processUri(uri));
+                        if (uri != null)
+                            processed.add(processUri(uri));
                     intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, processed);
                 }
             } else {
@@ -436,14 +511,18 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
             if (TextUtils.isEmpty(fname))
                 return uri;
 
-            File dir = new File(getCacheDir(), "shared");
+            File dir = new File(getFilesDir(), "shared");
             if (!dir.exists())
                 dir.mkdir();
 
             File file = new File(dir, fname);
 
             Log.i("Copying shared file to " + file);
-            Helper.copy(getContentResolver().openInputStream(uri), new FileOutputStream(file));
+            InputStream is = getContentResolver().openInputStream(uri);
+            if (is == null)
+                throw new FileNotFoundException(uri.toString());
+
+            Helper.copy(is, new FileOutputStream(file));
 
             return FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID, file);
         } catch (Throwable ex) {
@@ -459,7 +538,18 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
             Log.logExtras(intent);
             super.startActivity(intent);
         } catch (Throwable ex) {
-            Helper.reportNoViewer(this, intent, ex);
+            if (this instanceof ActivityMain)
+                throw ex;
+            if (intent.getPackage() == null)
+                Helper.reportNoViewer(this, intent, ex);
+            else {
+                intent.setPackage(null);
+                try {
+                    super.startActivity(intent);
+                } catch (Throwable exex) {
+                    Helper.reportNoViewer(this, intent, exex);
+                }
+            }
         }
     }
 
@@ -470,7 +560,16 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
             Log.logExtras(intent);
             super.startActivityForResult(intent, requestCode);
         } catch (Throwable ex) {
-            Helper.reportNoViewer(this, intent, ex);
+            if (intent.getPackage() == null)
+                Helper.reportNoViewer(this, intent, ex);
+            else {
+                intent.setPackage(null);
+                try {
+                    super.startActivityForResult(intent, requestCode);
+                } catch (Throwable exex) {
+                    Helper.reportNoViewer(this, intent, exex);
+                }
+            }
         }
     }
 
@@ -523,13 +622,6 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
                 owner.getLifecycle().removeObserver(this);
             }
         });
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (backHandled())
-            return;
-        super.onBackPressed();
     }
 
     public boolean dispatchKeyEvent(KeyEvent event) {
@@ -681,18 +773,30 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (item.getItemId() == android.R.id.home) {
-            if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
-                onBackPressed();
+            // Delegate to fragment first
+            if (super.onOptionsItemSelected(item))
+                return true;
+            performBack();
             return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
-    protected boolean backHandled() {
-        for (IKeyPressedListener listener : keyPressedListeners)
-            if (listener.onBackPressed())
-                return true;
-        return false;
+    public void performBack() {
+        if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)) {
+            // https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/app/Activity.java#3896
+            ActionBar ab = getSupportActionBar();
+            if (ab != null && ab.collapseActionView())
+                return;
+            FragmentManager fm = getSupportFragmentManager();
+            if (!fm.isStateSaved() && fm.popBackStackImmediate())
+                return;
+        }
+        finish();
+    }
+
+    public void onBackPressedFragment() {
+        performBack();
     }
 
     @Override
@@ -770,26 +874,12 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
         @Override
         public void onFragmentViewDestroyed(@NonNull FragmentManager fm, @NonNull Fragment f) {
             log(fm, f, "onFragmentViewDestroyed");
+            Helper.clearViews(f);
         }
 
         @Override
         public void onFragmentDestroyed(@NonNull FragmentManager fm, @NonNull Fragment f) {
             log(fm, f, "onFragmentDestroyed");
-            if (BuildConfig.PLAY_STORE_RELEASE)
-                return;
-            try {
-                for (Field field : f.getClass().getDeclaredFields()) {
-                    Class<?> type = field.getType();
-                    if (View.class.isAssignableFrom(type) ||
-                            RecyclerView.Adapter.class.isAssignableFrom(type)) {
-                        Log.i("Clearing " + f.getClass().getSimpleName() + ":" + field.getName());
-                        field.setAccessible(true);
-                        field.set(f, null);
-                    }
-                }
-            } catch (Throwable ex) {
-                Log.w(ex);
-            }
         }
 
         @Override
@@ -807,7 +897,5 @@ abstract class ActivityBase extends AppCompatActivity implements SharedPreferenc
 
     public interface IKeyPressedListener {
         boolean onKeyPressed(KeyEvent event);
-
-        boolean onBackPressed();
     }
 }

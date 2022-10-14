@@ -22,6 +22,7 @@ package eu.faircode.email;
 import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_GMAIL;
 
 import android.Manifest;
+import android.app.Activity;
 import android.app.Dialog;
 import android.app.NotificationChannel;
 import android.app.NotificationChannelGroup;
@@ -55,6 +56,7 @@ import android.widget.CompoundButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBarDrawerToggle;
@@ -99,11 +101,13 @@ import java.security.cert.X509Certificate;
 import java.security.spec.KeySpec;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Callable;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -125,6 +129,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     private boolean hasAccount;
     private String password;
     private boolean import_accounts;
+    private boolean import_delete;
     private boolean import_rules;
     private boolean import_contacts;
     private boolean import_answers;
@@ -133,8 +138,8 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     private static final int KEY_ITERATIONS = 65536;
     private static final int KEY_LENGTH = 256;
 
-    static final int REQUEST_PERMISSION = 1;
-    static final int REQUEST_SOUND = 2;
+    static final int REQUEST_SOUND_INBOUND = 1;
+    static final int REQUEST_SOUND_OUTBOUND = 2;
     static final int REQUEST_EXPORT = 3;
     static final int REQUEST_IMPORT = 4;
     static final int REQUEST_CHOOSE_ACCOUNT = 5;
@@ -142,7 +147,10 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     static final int REQUEST_IMPORT_CERTIFICATE = 7;
     static final int REQUEST_OAUTH = 8;
     static final int REQUEST_STILL = 9;
-    static final int REQUEST_DELETE_ACCOUNT = 10;
+    static final int REQUEST_SELECT_IDENTITY = 10;
+    static final int REQUEST_EDIT_SIGNATURE = 11;
+    static final int REQUEST_DELETE_ACCOUNT = 12;
+    static final int REQUEST_IMPORT_PROVIDERS = 13;
 
     static final int PI_MISC = 1;
 
@@ -157,6 +165,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     static final String ACTION_MANAGE_LOCAL_CONTACTS = BuildConfig.APPLICATION_ID + ".MANAGE_LOCAL_CONTACTS";
     static final String ACTION_MANAGE_CERTIFICATES = BuildConfig.APPLICATION_ID + ".MANAGE_CERTIFICATES";
     static final String ACTION_IMPORT_CERTIFICATE = BuildConfig.APPLICATION_ID + ".IMPORT_CERTIFICATE";
+    static final String ACTION_SETUP_REORDER = BuildConfig.APPLICATION_ID + ".SETUP_REORDER";
     static final String ACTION_SETUP_MORE = BuildConfig.APPLICATION_ID + ".SETUP_MORE";
 
     @Override
@@ -209,8 +218,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
         menus.add(new NavMenuItem(R.drawable.twotone_close_24, R.string.title_setup_close, new Runnable() {
             @Override
             public void run() {
-                drawerLayout.closeDrawer(drawerContainer, false);
-                onBackPressed();
+                onMenuClose();
             }
         }).setColor(colorWarning).setSeparated());
 
@@ -234,7 +242,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
             @Override
             public void run() {
                 drawerLayout.closeDrawer(drawerContainer);
-                onMenuOrder(R.string.title_setup_reorder_accounts, EntityAccount.class);
+                onMenuOrder(R.string.title_setup_reorder_accounts, EntityAccount.class.getName());
             }
         }));
 
@@ -242,7 +250,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
             @Override
             public void run() {
                 drawerLayout.closeDrawer(drawerContainer);
-                onMenuOrder(R.string.title_setup_reorder_folders, TupleFolderSort.class);
+                onMenuOrder(R.string.title_setup_reorder_folders, TupleFolderSort.class.getName());
             }
         }).setSeparated());
 
@@ -268,11 +276,12 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                 drawerLayout.closeDrawer(drawerContainer);
                 onMenuFAQ();
             }
-        }, new Runnable() {
+        }, new Callable<Boolean>() {
             @Override
-            public void run() {
+            public Boolean call() {
                 drawerLayout.closeDrawer(drawerContainer);
                 onDebugInfo();
+                return true;
             }
         }).setExternal(true));
 
@@ -298,16 +307,27 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                 drawerLayout.closeDrawer(drawerContainer);
                 onMenuAbout();
             }
-        }, new Runnable() {
+        }, new Callable<Boolean>() {
             @Override
-            public void run() {
+            public Boolean call() {
                 startActivity(new Intent(ActivitySetup.this, ActivityBilling.class));
+                return true;
             }
         }).setSubtitle(BuildConfig.VERSION_NAME));
 
         adapter.set(menus, true);
 
         getSupportFragmentManager().addOnBackStackChangedListener(this);
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (Helper.isKeyboardVisible(view))
+                    Helper.hideKeyboard(view);
+                else
+                    onExit();
+            }
+        });
 
         if (getSupportFragmentManager().getFragments().size() == 0) {
             Intent intent = getIntent();
@@ -337,6 +357,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
             drawerToggle.setDrawerIndicatorEnabled(savedInstanceState.getBoolean("fair:toggle"));
             password = savedInstanceState.getString("fair:password");
             import_accounts = savedInstanceState.getBoolean("fair:import_accounts");
+            import_delete = savedInstanceState.getBoolean("fair:import_delete");
             import_rules = savedInstanceState.getBoolean("fair:import_rules");
             import_contacts = savedInstanceState.getBoolean("fair:import_contacts");
             import_answers = savedInstanceState.getBoolean("fair:import_answers");
@@ -355,9 +376,10 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
 
     @Override
     protected void onSaveInstanceState(Bundle outState) {
-        outState.putBoolean("fair:toggle", drawerToggle.isDrawerIndicatorEnabled());
+        outState.putBoolean("fair:toggle", drawerToggle == null || drawerToggle.isDrawerIndicatorEnabled());
         outState.putString("fair:password", password);
         outState.putBoolean("fair:import_accounts", import_accounts);
+        outState.putBoolean("fair:import_delete", import_delete);
         outState.putBoolean("fair:import_rules", import_rules);
         outState.putBoolean("fair:import_contacts", import_contacts);
         outState.putBoolean("fair:import_answers", import_answers);
@@ -396,6 +418,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
         iff.addAction(ACTION_MANAGE_LOCAL_CONTACTS);
         iff.addAction(ACTION_MANAGE_CERTIFICATES);
         iff.addAction(ACTION_IMPORT_CERTIFICATE);
+        iff.addAction(ACTION_SETUP_REORDER);
         iff.addAction(ACTION_SETUP_MORE);
         lbm.registerReceiver(receiver, iff);
     }
@@ -413,12 +436,34 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
         drawerToggle.onConfigurationChanged(newConfig);
     }
 
-    @Override
-    public void onBackPressed() {
+    public void onExit() {
         if (drawerLayout.isDrawerOpen(drawerContainer))
             drawerLayout.closeDrawer(drawerContainer);
-        else
-            super.onBackPressed();
+        else {
+            if (getSupportFragmentManager().getBackStackEntryCount() > 1) {
+                performBack();
+                return;
+            }
+
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+            boolean setup_reminder = prefs.getBoolean("setup_reminder", true);
+
+            boolean hasContactPermissions =
+                    hasPermission(android.Manifest.permission.READ_CONTACTS);
+            boolean hasNotificationPermissions =
+                    (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                            hasPermission(Manifest.permission.POST_NOTIFICATIONS));
+            boolean isIgnoring = !Boolean.FALSE.equals(Helper.isIgnoringOptimizations(this));
+
+            if (!setup_reminder ||
+                    (hasContactPermissions && hasNotificationPermissions && isIgnoring))
+                performBack();
+            else {
+                FragmentDialogPermissions fragment = new FragmentDialogPermissions();
+                fragment.setTargetActivity(this, REQUEST_STILL);
+                fragment.show(getSupportFragmentManager(), "setup:still");
+            }
+        }
     }
 
     @Override
@@ -439,6 +484,10 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     public boolean onOptionsItemSelected(MenuItem item) {
         if (drawerToggle.onOptionsItemSelected(item))
             return true;
+
+        int itemId = item.getItemId();
+        if (itemId == R.id.menu_close)
+            onMenuClose();
 
         return super.onOptionsItemSelected(item);
     }
@@ -461,10 +510,27 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                     if (resultCode == RESULT_OK && data != null)
                         handleImportCertificate(data);
                     break;
+                case REQUEST_IMPORT_PROVIDERS:
+                    if (resultCode == RESULT_OK && data != null)
+                        handleImportProviders(data);
+                    break;
+                case ActivitySetup.REQUEST_STILL:
+                    if (resultCode == Activity.RESULT_OK) {
+                        Bundle result = new Bundle();
+                        result.putInt("page", 0);
+                        getSupportFragmentManager().setFragmentResult("options:tab", result);
+                    } else
+                        performBack();
+                    break;
             }
         } catch (Throwable ex) {
             Log.e(ex);
         }
+    }
+
+    private void onMenuClose() {
+        drawerLayout.closeDrawer(drawerContainer, false);
+        onExit();
     }
 
     private void onMenuExport() {
@@ -494,13 +560,13 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
         }
     }
 
-    private void onMenuOrder(int title, Class clazz) {
+    private void onMenuOrder(int title, String className) {
         if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
             getSupportFragmentManager().popBackStack("order", FragmentManager.POP_BACK_STACK_INCLUSIVE);
 
         Bundle args = new Bundle();
         args.putInt("title", title);
-        args.putString("class", clazz.getName());
+        args.putString("class", className);
 
         FragmentOrder fragment = new FragmentOrder();
         fragment.setArguments(args);
@@ -558,7 +624,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     }
 
     private void onMenuIssue() {
-        startActivity(Helper.getIntentIssue(this));
+        startActivity(Helper.getIntentIssue(this, "Setup:issue"));
     }
 
     private void onMenuPrivacy() {
@@ -580,9 +646,18 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
         args.putString("password", this.password);
 
         new SimpleTask<Void>() {
+            private Toast toast = null;
+
             @Override
             protected void onPreExecute(Bundle args) {
-                ToastEx.makeText(ActivitySetup.this, R.string.title_executing, Toast.LENGTH_LONG).show();
+                toast = ToastEx.makeText(ActivitySetup.this, R.string.title_executing, Toast.LENGTH_LONG);
+                toast.show();
+            }
+
+            @Override
+            protected void onPostExecute(Bundle args) {
+                if (toast != null)
+                    toast.cancel();
             }
 
             @Override
@@ -602,7 +677,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
 
                 Log.i("Collecting data");
                 DB db = DB.getInstance(context);
-                NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+                NotificationManager nm = Helper.getSystemService(context, NotificationManager.class);
 
                 // Accounts
                 JSONArray jaccounts = new JSONArray();
@@ -644,8 +719,39 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                         }
 
                         JSONArray jrules = new JSONArray();
-                        for (EntityRule rule : db.rule().getRules(folder.id))
+                        for (EntityRule rule : db.rule().getRules(folder.id)) {
+                            try {
+                                JSONObject jaction = new JSONObject(rule.action);
+                                int type = jaction.getInt("type");
+                                switch (type) {
+                                    case EntityRule.TYPE_MOVE:
+                                    case EntityRule.TYPE_COPY:
+                                        long target = jaction.getLong("target");
+                                        EntityFolder f = db.folder().getFolder(target);
+                                        EntityAccount a = (f == null ? null : db.account().getAccount(f.account));
+                                        if (a != null)
+                                            jaction.put("targetAccountUuid", a.uuid);
+                                        if (f != null)
+                                            jaction.put("targetFolderName", f.name);
+                                        break;
+                                    case EntityRule.TYPE_ANSWER:
+                                        long identity = jaction.getLong("identity");
+                                        long answer = jaction.getLong("answer");
+                                        EntityIdentity i = db.identity().getIdentity(identity);
+                                        EntityAnswer t = db.answer().getAnswer(answer);
+                                        if (i != null)
+                                            jaction.put("identityUuid", i.uuid);
+                                        if (t != null)
+                                            jaction.put("answerUuid", t.uuid);
+                                        break;
+                                }
+                                rule.action = jaction.toString();
+                            } catch (Throwable ex) {
+                                Log.e(ex);
+                            }
+
                             jrules.put(rule.toJSON());
+                        }
                         jfolder.put("rules", jrules);
 
                         jfolders.put(jfolder);
@@ -725,6 +831,8 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                 DocumentFile file = DocumentFile.fromSingleUri(context, uri);
                 try (OutputStream raw = resolver.openOutputStream(uri)) {
                     Log.i("Writing URI=" + uri + " name=" + file.getName() + " virtual=" + file.isVirtual());
+                    if (raw == null)
+                        throw new FileNotFoundException(uri.toString());
 
                     if (TextUtils.isEmpty(password))
                         raw.write(jexport.toString(2).getBytes());
@@ -758,6 +866,14 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
             @Override
             protected void onExecuted(Bundle args, Void data) {
                 ToastEx.makeText(ActivitySetup.this, R.string.title_setup_exported, Toast.LENGTH_LONG).show();
+            }
+
+            @Override
+            protected void onDestroyed(Bundle args) {
+                if (toast != null) {
+                    toast.cancel();
+                    toast = null;
+                }
             }
 
             @Override
@@ -795,9 +911,28 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
         TextView tvLog = dview.findViewById(R.id.tvLog);
         tvLog.setText(null);
 
+        Map<String, Object> defer = Collections.synchronizedMap(new HashMap<>());
+
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setView(dview)
                 .setPositiveButton(android.R.string.ok, null)
+                .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                    @Override
+                    public void onDismiss(DialogInterface dialogInterface) {
+                        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(dview.getContext());
+                        SharedPreferences.Editor editor = prefs.edit();
+
+                        for (String key : defer.keySet()) {
+                            Object value = defer.get(key);
+                            if (value instanceof Boolean)
+                                editor.putBoolean(key, (Boolean) value);
+                            else if (value instanceof String)
+                                editor.putString(key, (String) value);
+                        }
+
+                        editor.apply();
+                    }
+                })
                 .show();
 
         Button ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
@@ -807,6 +942,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
         args.putParcelable("uri", uri);
         args.putString("password", this.password);
         args.putBoolean("import_accounts", this.import_accounts);
+        args.putBoolean("import_delete", this.import_delete);
         args.putBoolean("import_rules", this.import_rules);
         args.putBoolean("import_contacts", this.import_contacts);
         args.putBoolean("import_answers", this.import_answers);
@@ -831,31 +967,28 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                 Uri uri = args.getParcelable("uri");
                 String password = args.getString("password");
                 boolean import_accounts = args.getBoolean("import_accounts");
+                boolean import_delete = args.getBoolean("import_delete");
                 boolean import_rules = args.getBoolean("import_rules");
                 boolean import_contacts = args.getBoolean("import_contacts");
                 boolean import_answers = args.getBoolean("import_answers");
                 boolean import_settings = args.getBoolean("import_settings");
                 EntityLog.log(context, "Importing " + uri +
                         " accounts=" + import_accounts +
+                        " delete=" + import_delete +
                         " rules=" + import_rules +
                         " contacts=" + import_contacts +
                         " answers=" + import_answers +
                         " settings=" + import_settings);
 
-                if (uri == null)
-                    throw new FileNotFoundException();
-
-                if (!"content".equals(uri.getScheme()) &&
-                        !Helper.hasPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)) {
-                    Log.w("Import uri=" + uri);
-                    throw new IllegalArgumentException(context.getString(R.string.title_no_stream));
-                }
+                NoStreamException.check(uri, context);
 
                 StringBuilder data = new StringBuilder();
                 Log.i("Reading URI=" + uri);
                 ContentResolver resolver = context.getContentResolver();
-                try (InputStream raw = new BufferedInputStream(resolver.openInputStream(uri))) {
-
+                InputStream is = resolver.openInputStream(uri);
+                if (is == null)
+                    throw new FileNotFoundException(uri.toString());
+                try (InputStream raw = new BufferedInputStream(is)) {
                     InputStream in;
                     if (TextUtils.isEmpty(password))
                         in = raw;
@@ -891,7 +1024,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                 JSONObject jimport = new JSONObject(json);
 
                 DB db = DB.getInstance(context);
-                NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+                NotificationManager nm = Helper.getSystemService(context, NotificationManager.class);
                 try {
                     db.beginTransaction();
 
@@ -911,6 +1044,10 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                             long id = answer.id;
                             answer.id = null;
 
+                            EntityAnswer existing = db.answer().getAnswerByUUID(answer.uuid);
+                            if (existing != null)
+                                db.answer().deleteAnswer(existing.id);
+
                             answer.id = db.answer().insertAnswer(answer);
                             xAnswer.put(id, answer.id);
 
@@ -927,6 +1064,12 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                             JSONObject jaccount = (JSONObject) jaccounts.get(a);
                             EntityAccount account = EntityAccount.fromJSON(jaccount);
                             postProgress(context.getString(R.string.title_importing_account, account.name));
+
+                            if (import_delete) {
+                                EntityAccount delete = db.account().getAccount(account.auth_type, account.user);
+                                if (delete != null)
+                                    db.account().deleteAccount(delete.id);
+                            }
 
                             EntityAccount existing = db.account().getAccountByUUID(account.uuid);
                             if (existing != null) {
@@ -1064,6 +1207,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                                         JSONObject jcontact = (JSONObject) jcontacts.get(c);
                                         EntityContact contact = EntityContact.fromJSON(jcontact);
                                         contact.account = account.id;
+                                        contact.identity = xIdentity.get(contact.identity);
                                         if (db.contact().getContact(contact.account, contact.type, contact.email) == null)
                                             contact.id = db.contact().insertContact(contact);
                                     }
@@ -1085,17 +1229,48 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                                     switch (type) {
                                         case EntityRule.TYPE_MOVE:
                                         case EntityRule.TYPE_COPY:
+                                            String targetAccountUuid = jaction.optString("targetAccountUuid");
+                                            String targetFolderName = jaction.optString("targetFolderName");
+                                            if (!TextUtils.isEmpty(targetAccountUuid) && !TextUtils.isEmpty(targetFolderName)) {
+                                                EntityAccount a = db.account().getAccountByUUID(targetAccountUuid);
+                                                if (a != null) {
+                                                    EntityFolder f = db.folder().getFolderByName(a.id, targetFolderName);
+                                                    if (f != null) {
+                                                        jaction.put("target", f.id);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+
+                                            // Legacy
                                             long target = jaction.getLong("target");
-                                            Log.i("XLAT target " + target + " > " + xFolder.get(target));
-                                            jaction.put("target", xFolder.get(target));
+                                            Long tid = xFolder.get(target);
+                                            Log.i("XLAT target " + target + " > " + tid);
+                                            if (tid != null)
+                                                jaction.put("target", tid);
                                             break;
                                         case EntityRule.TYPE_ANSWER:
+                                            String identityUuid = jaction.optString("identityUuid");
+                                            String answerUuid = jaction.optString("answerUuid");
+                                            if (!TextUtils.isEmpty(identityUuid) && !TextUtils.isEmpty(answerUuid)) {
+                                                EntityIdentity i = db.identity().getIdentityByUUID(identityUuid);
+                                                EntityAnswer a = db.answer().getAnswerByUUID(answerUuid);
+                                                if (i != null && a != null) {
+                                                    jaction.put("identity", i.id);
+                                                    jaction.put("answer", a.id);
+                                                    break;
+                                                }
+                                            }
+
+                                            // Legacy
                                             long identity = jaction.getLong("identity");
                                             long answer = jaction.getLong("answer");
-                                            Log.i("XLAT identity " + identity + " > " + xIdentity.get(identity));
-                                            Log.i("XLAT answer " + answer + " > " + xAnswer.get(answer));
-                                            jaction.put("identity", xIdentity.get(identity));
-                                            jaction.put("answer", xAnswer.get(answer));
+                                            Long iid = xIdentity.get(identity);
+                                            Long aid = xAnswer.get(answer);
+                                            Log.i("XLAT identity " + identity + " > " + iid);
+                                            Log.i("XLAT answer " + answer + " > " + aid);
+                                            jaction.put("identity", iid);
+                                            jaction.put("answer", aid);
                                             break;
                                     }
 
@@ -1137,6 +1312,9 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                             if ("pro".equals(key) && !BuildConfig.DEBUG)
                                 continue;
 
+                            if ("accept_unsupported".equals(key))
+                                continue;
+
                             if ("biometrics".equals(key) || "pin".equals(key))
                                 continue;
 
@@ -1152,10 +1330,16 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
 
                             // Prevent restart
                             if ("secure".equals(key) ||
+                                    "load_emoji".equals(key) ||
                                     "shortcuts".equals(key) ||
                                     "language".equals(key) ||
                                     "wal".equals(key))
                                 continue;
+
+                            if ("theme".equals(key) || "beige".equals(key)) {
+                                defer.put(key, jsetting.get("value"));
+                                continue;
+                            }
 
                             if (key != null && key.startsWith("widget."))
                                 continue;
@@ -1244,18 +1428,22 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
 
             @Override
             protected void onException(Bundle args, Throwable ex) {
-                SpannableStringBuilder ssb = new SpannableStringBuilder();
-                if (ex.getCause() instanceof BadPaddingException)
-                    ssb.append(getString(R.string.title_setup_password_invalid));
-                else if (ex instanceof IOException && ex.getCause() instanceof IllegalBlockSizeException)
-                    ssb.append(getString(R.string.title_setup_import_invalid));
-                if (ssb.length() > 0) {
-                    ssb.setSpan(new StyleSpan(Typeface.BOLD), 0, ssb.length(), 0);
-                    ssb.setSpan(new ForegroundColorSpan(colorWarning), 0, ssb.length(), 0);
-                    ssb.append("\n\n");
+                if (ex instanceof NoStreamException)
+                    ((NoStreamException) ex).report(ActivitySetup.this);
+                else {
+                    SpannableStringBuilder ssb = new SpannableStringBuilder();
+                    if (ex.getCause() instanceof BadPaddingException)
+                        ssb.append(getString(R.string.title_setup_password_invalid));
+                    else if (ex instanceof IOException && ex.getCause() instanceof IllegalBlockSizeException)
+                        ssb.append(getString(R.string.title_setup_import_invalid));
+                    if (ssb.length() > 0) {
+                        ssb.setSpan(new StyleSpan(Typeface.BOLD), 0, ssb.length(), 0);
+                        ssb.setSpan(new ForegroundColorSpan(colorWarning), 0, ssb.length(), 0);
+                        ssb.append("\n\n");
+                    }
+                    ssb.append(ex.toString());
+                    onProgress(ssb, null);
                 }
-                ssb.append(ex.toString());
-                onProgress(ssb, null);
             }
         }.execute(this, args, "setup:import");
     }
@@ -1271,10 +1459,13 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
 
                 DB db = DB.getInstance(context);
                 ContentResolver resolver = context.getContentResolver();
-                try (InputStream is = new BufferedInputStream(resolver.openInputStream(uri))) {
+                InputStream is = resolver.openInputStream(uri);
+                if (is == null)
+                    throw new FileNotFoundException(uri.toString());
+                try (InputStream bis = new BufferedInputStream(is)) {
                     XmlPullParserFactory factory = XmlPullParserFactory.newInstance();
                     XmlPullParser xml = factory.newPullParser();
-                    xml.setInput(new InputStreamReader(is));
+                    xml.setInput(new InputStreamReader(bis));
 
                     EntityAccount account = null;
                     EntityIdentity identity = null;
@@ -1491,6 +1682,9 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                     X509Certificate cert;
                     CertificateFactory fact = CertificateFactory.getInstance("X.509");
                     try (InputStream is = context.getContentResolver().openInputStream(uri)) {
+                        if (is == null)
+                            throw new FileNotFoundException(uri.toString());
+
                         if (der)
                             cert = (X509Certificate) fact.generateCertificate(is);
                         else {
@@ -1524,6 +1718,8 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                 @Override
                 protected void onException(Bundle args, Throwable ex) {
                     // DecoderException: unable to decode base64 string: invalid characters encountered in base64 data
+                    if (ex instanceof DecoderException)
+                        ex = new Throwable("Are you trying to import a PGP key as an S/MIME key?", ex);
                     boolean expected =
                             (ex instanceof IllegalArgumentException ||
                                     ex instanceof FileNotFoundException ||
@@ -1536,9 +1732,42 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
         }
     }
 
+    private void handleImportProviders(Intent data) {
+        Bundle args = new Bundle();
+        args.putParcelable("uri", data.getData());
+
+        new SimpleTask<Void>() {
+            @Override
+            protected Void onExecute(Context context, Bundle args) throws Throwable {
+                Uri uri = args.getParcelable("uri");
+
+                Log.i("Reading URI=" + uri);
+                ContentResolver resolver = context.getContentResolver();
+                InputStream is = resolver.openInputStream(uri);
+                if (is == null)
+                    throw new FileNotFoundException(uri.toString());
+                EmailProvider.importProfiles(is, context);
+
+                return null;
+            }
+
+            @Override
+            protected void onExecuted(Bundle args, Void data) {
+                ToastEx.makeText(ActivitySetup.this, R.string.title_completed, Toast.LENGTH_LONG).show();
+            }
+
+            @Override
+            protected void onException(Bundle args, Throwable ex) {
+                Log.unexpectedError(getSupportFragmentManager(), ex);
+            }
+        }.execute(this, args, "import:providers");
+    }
+
     private void onGmail(Intent intent) {
+        FragmentGmail fragment = new FragmentGmail();
+        fragment.setArguments(intent.getExtras());
         FragmentTransaction fragmentTransaction = getSupportFragmentManager().beginTransaction();
-        fragmentTransaction.replace(R.id.content_frame, new FragmentGmail()).addToBackStack("quick");
+        fragmentTransaction.replace(R.id.content_frame, fragment).addToBackStack("quick");
         fragmentTransaction.commit();
     }
 
@@ -1551,8 +1780,10 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     }
 
     private void onQuickSetup(Intent intent) {
+        FragmentQuickSetup fragment = new FragmentQuickSetup();
+        fragment.setArguments(new Bundle());
         FragmentTransaction fragmentTransaction = getSupportFragmentManager().beginTransaction();
-        fragmentTransaction.replace(R.id.content_frame, new FragmentQuickSetup()).addToBackStack("quick");
+        fragmentTransaction.replace(R.id.content_frame, fragment).addToBackStack("quick");
         fragmentTransaction.commit();
     }
 
@@ -1604,8 +1835,15 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     }
 
     private void onManageLocalContacts(Intent intent) {
+        Bundle args = new Bundle();
+        // All accounts
+        args.putBoolean("junk", intent.getBooleanExtra("junk", false));
+
+        FragmentContacts fragment = new FragmentContacts();
+        fragment.setArguments(args);
+
         FragmentTransaction fragmentTransaction = getSupportFragmentManager().beginTransaction();
-        fragmentTransaction.replace(R.id.content_frame, new FragmentContacts()).addToBackStack("contacts");
+        fragmentTransaction.replace(R.id.content_frame, fragment).addToBackStack("contacts");
         fragmentTransaction.commit();
     }
 
@@ -1618,6 +1856,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     private void onImportCertificate(Intent intent) {
         Intent open = new Intent(Intent.ACTION_GET_CONTENT);
         open.addCategory(Intent.CATEGORY_OPENABLE);
+        open.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         open.setType("*/*");
         if (open.resolveActivity(getPackageManager()) == null)  // system whitelisted
             ToastEx.makeText(this, R.string.title_no_saf, Toast.LENGTH_LONG).show();
@@ -1632,6 +1871,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     private static Intent getIntentExport() {
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_TITLE, "fairemail_" +
                 new SimpleDateFormat("yyyyMMdd").format(new Date().getTime()) + ".backup");
@@ -1642,6 +1882,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     private static Intent getIntentImport() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setType("*/*");
         return intent;
     }
@@ -1652,8 +1893,8 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
 
         @Override
         public void onSaveInstanceState(@NonNull Bundle outState) {
-            outState.putString("fair:password1", etPassword1.getEditText().getText().toString());
-            outState.putString("fair:password2", etPassword2.getEditText().getText().toString());
+            outState.putString("fair:password1", etPassword1 == null ? null : etPassword1.getEditText().getText().toString());
+            outState.putString("fair:password2", etPassword2 == null ? null : etPassword2.getEditText().getText().toString());
             super.onSaveInstanceState(outState);
         }
 
@@ -1672,7 +1913,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
 
             Dialog dialog = new AlertDialog.Builder(context)
                     .setView(dview)
-                    .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    .setPositiveButton(R.string.title_add_image_select, new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
                             String password1 = etPassword1.getEditText().getText().toString();
@@ -1707,7 +1948,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
 
         @Override
         public void onSaveInstanceState(@NonNull Bundle outState) {
-            outState.putString("fair:password1", etPassword1.getEditText().getText().toString());
+            outState.putString("fair:password1", etPassword1 == null ? null : etPassword1.getEditText().getText().toString());
             super.onSaveInstanceState(outState);
         }
 
@@ -1718,6 +1959,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
             View dview = LayoutInflater.from(context).inflate(R.layout.dialog_import, null);
             etPassword1 = dview.findViewById(R.id.tilPassword1);
             CheckBox cbAccounts = dview.findViewById(R.id.cbAccounts);
+            CheckBox cbDelete = dview.findViewById(R.id.cbDelete);
             CheckBox cbRules = dview.findViewById(R.id.cbRules);
             CheckBox cbContacts = dview.findViewById(R.id.cbContacts);
             CheckBox cbAnswers = dview.findViewById(R.id.cbAnswers);
@@ -1736,7 +1978,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
 
             Dialog dialog = new AlertDialog.Builder(context)
                     .setView(dview)
-                    .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    .setPositiveButton(R.string.title_add_image_select, new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
                             String password1 = etPassword1.getEditText().getText().toString();
@@ -1750,6 +1992,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                                 ActivitySetup activity = (ActivitySetup) getActivity();
                                 activity.password = password1;
                                 activity.import_accounts = cbAccounts.isChecked();
+                                activity.import_delete = cbDelete.isChecked();
                                 activity.import_rules = cbRules.isChecked();
                                 activity.import_contacts = cbContacts.isChecked();
                                 activity.import_answers = cbAnswers.isChecked();
@@ -1795,6 +2038,8 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
                     onManageCertificates(intent);
                 else if (ACTION_IMPORT_CERTIFICATE.equals(action))
                     onImportCertificate(intent);
+                else if (ACTION_SETUP_REORDER.equals(action))
+                    onMenuOrder(R.string.title_setup_reorder_accounts, intent.getStringExtra("className"));
                 else if (ACTION_SETUP_MORE.equals(action))
                     onSetupMore(intent);
             }

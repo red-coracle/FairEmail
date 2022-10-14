@@ -21,15 +21,19 @@ package eu.faircode.email;
 
 import android.app.ActivityOptions;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.preference.PreferenceManager;
@@ -38,8 +42,9 @@ import java.util.Date;
 import java.util.List;
 
 public class ActivityMain extends ActivityBase implements FragmentManager.OnBackStackChangedListener, SharedPreferences.OnSharedPreferenceChangeListener {
+    static final int RESTORE_STATE_INTERVAL = 3; // minutes
+
     private static final long SPLASH_DELAY = 1500L; // milliseconds
-    private static final long RESTORE_STATE_INTERVAL = 3 * 60 * 1000L; // milliseconds
     private static final long SERVICE_START_DELAY = 5 * 1000L; // milliseconds
 
     @Override
@@ -59,7 +64,7 @@ public class ActivityMain extends ActivityBase implements FragmentManager.OnBack
                 @Override
                 public void onClick(View v) {
                     prefs.edit().putBoolean("accept_unsupported", true).commit();
-                    ApplicationEx.restart(v.getContext());
+                    ApplicationEx.restart(v.getContext(), "accept_unsupported");
                 }
             });
 
@@ -82,7 +87,6 @@ public class ActivityMain extends ActivityBase implements FragmentManager.OnBack
                 protected EntityMessage onExecute(Context context, Bundle args) {
                     Uri data = args.getParcelable("data");
                     long id;
-                    String f = data.getFragment();
                     if ("email.faircode.eu".equals(data.getHost()))
                         id = Long.parseLong(data.getFragment());
                     else {
@@ -108,7 +112,7 @@ public class ActivityMain extends ActivityBase implements FragmentManager.OnBack
 
                     Intent thread = new Intent(ActivityMain.this, ActivityView.class);
                     thread.setAction("thread:" + message.id);
-                    thread.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    thread.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     thread.putExtra("account", message.account);
                     thread.putExtra("folder", message.folder);
                     thread.putExtra("thread", message.thread);
@@ -170,11 +174,23 @@ public class ActivityMain extends ActivityBase implements FragmentManager.OnBack
 
                 @Override
                 protected Boolean onExecute(Context context, Bundle args) {
+                    DB db = DB.getInstance(context);
+
                     SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+                    String last_activity = prefs.getString("last_activity", null);
+                    long composing = prefs.getLong("last_composing", -1L);
+                    if (ActivityCompose.class.getName().equals(last_activity) && composing >= 0) {
+                        EntityMessage draft = db.message().getMessage(composing);
+                        if (draft == null || draft.ui_hide)
+                            prefs.edit()
+                                    .remove("last_activity")
+                                    .remove("last_composing")
+                                    .apply();
+                    }
+
                     if (prefs.getBoolean("has_accounts", false))
                         return true;
 
-                    DB db = DB.getInstance(context);
                     List<EntityAccount> accounts = db.account().getSynchronizingAccounts(null);
                     boolean hasAccounts = (accounts != null && accounts.size() > 0);
 
@@ -202,9 +218,18 @@ public class ActivityMain extends ActivityBase implements FragmentManager.OnBack
                         // https://developer.android.com/docs/quality-guidelines/core-app-quality
                         long now = new Date().getTime();
                         long last = prefs.getLong("last_launched", 0L);
-                        if (!BuildConfig.PLAY_STORE_RELEASE &&
-                                now - last > RESTORE_STATE_INTERVAL)
+                        boolean restore_on_launch = prefs.getBoolean("restore_on_launch", false);
+                        if (!restore_on_launch || now - last > RESTORE_STATE_INTERVAL * 60 * 1000L)
                             view.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        else {
+                            String last_activity = prefs.getString("last_activity", null);
+                            long composing = prefs.getLong("last_composing", -1L);
+                            if (ActivityCompose.class.getName().equals(last_activity) && composing >= 0)
+                                view = new Intent(ActivityMain.this, ActivityCompose.class)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        .putExtra("action", "edit")
+                                        .putExtra("id", composing);
+                        }
 
                         Intent saved = args.getParcelable("intent");
                         if (saved == null) {
@@ -241,15 +266,44 @@ public class ActivityMain extends ActivityBase implements FragmentManager.OnBack
 
                 @Override
                 protected void onException(Bundle args, Throwable ex) {
-                    Log.unexpectedError(getSupportFragmentManager(), ex);
+                    // Log.unexpectedError() won't work here
+                    Log.e(ex);
+
+                    LayoutInflater inflater = LayoutInflater.from(ActivityMain.this);
+                    View dview = inflater.inflate(R.layout.dialog_unexpected, null);
+                    TextView tvError = dview.findViewById(R.id.tvError);
+
+                    String message = Log.formatThrowable(ex, false);
+                    tvError.setText(message);
+
+                    new AlertDialog.Builder(ActivityMain.this)
+                            .setView(dview)
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .setNeutralButton(R.string.menu_faq, new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    Uri uri = Helper.getSupportUri(ActivityMain.this, "Main:error")
+                                            .buildUpon()
+                                            .appendQueryParameter("message", Log.formatThrowable(ex, false))
+                                            .build();
+                                    Helper.view(ActivityMain.this, uri, true);
+                                }
+                            })
+                            .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                                @Override
+                                public void onDismiss(DialogInterface dialog) {
+                                    finish();
+                                }
+                            })
+                            .show();
                 }
             };
 
             if (Helper.shouldAuthenticate(this, false))
                 Helper.authenticate(ActivityMain.this, ActivityMain.this, null,
-                        new Runnable() {
+                        new RunnableEx("auth:succeeded") {
                             @Override
-                            public void run() {
+                            public void delegate() {
                                 Intent intent = getIntent();
                                 Bundle args = new Bundle();
                                 if (intent.hasExtra("intent"))
@@ -257,9 +311,9 @@ public class ActivityMain extends ActivityBase implements FragmentManager.OnBack
                                 boot.execute(ActivityMain.this, args, "main:accounts");
                             }
                         },
-                        new Runnable() {
+                        new RunnableEx("auth:cancelled") {
                             @Override
-                            public void run() {
+                            public void delegate() {
                                 try {
                                     finish();
                                 } catch (Throwable ex) {

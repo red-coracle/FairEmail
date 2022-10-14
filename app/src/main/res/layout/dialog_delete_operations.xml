@@ -10,13 +10,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
-        <eu.faircode.email.FixedTextView
+        <TextView
             android:id="@+id/tvAddImage"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:drawableStart="@drawable/twotone_delete_24"
             android:drawablePadding="6dp"
-            android:drawableTint="?attr/colorError"
+            app:drawableTint="?attr/colorWarning"
             android:text="@string/title_delete_operation_title"
             android:textAppearance="@style/TextAppearance.AppCompat.Large"
             app:layout_constraintStart_toStartOf="parent"
@@ -43,7 +43,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/cbError" />
 
-        <eu.faircode.email.FixedTextView
+        <TextView
             android:id="@+id/tvFetch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -65,7 +65,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvFetch" />
 
-        <eu.faircode.email.FixedTextView
+        <TextView
             android:id="@+id/tvMove"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -86,7 +86,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvMove" />
 
-        <eu.faircode.email.FixedTextView
+        <TextView
             android:id="@+id/tvFlag"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -108,7 +108,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvFlag" />
 
-        <eu.faircode.email.FixedTextView
+        <TextView
             android:id="@+id/tvDelete"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

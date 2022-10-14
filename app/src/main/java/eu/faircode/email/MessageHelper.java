@@ -24,12 +24,12 @@ import static android.system.OsConstants.ENOSPC;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
 import android.system.ErrnoException;
 import android.text.TextUtils;
 import android.util.Base64;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.core.net.MailTo;
 import androidx.core.util.PatternsCompat;
 import androidx.documentfile.provider.DocumentFile;
@@ -46,9 +46,16 @@ import com.sun.mail.imap.protocol.IMAPProtocol;
 import com.sun.mail.imap.protocol.MessageSet;
 import com.sun.mail.util.ASCIIUtility;
 import com.sun.mail.util.BASE64DecoderStream;
+import com.sun.mail.util.DecodingException;
 import com.sun.mail.util.FolderClosedIOException;
 import com.sun.mail.util.MessageRemovedIOException;
 
+import org.apache.commons.compress.archivers.ArchiveEntry;
+import org.apache.commons.compress.archivers.ArchiveException;
+import org.apache.commons.compress.archivers.ArchiveInputStream;
+import org.apache.commons.compress.archivers.ArchiveStreamFactory;
+import org.apache.commons.compress.archivers.zip.UnsupportedZipFeatureException;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
@@ -59,7 +66,6 @@ import org.simplejavamail.outlookmessageparser.model.OutlookFileAttachment;
 import org.simplejavamail.outlookmessageparser.model.OutlookMessage;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -76,7 +82,12 @@ import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
+import java.security.KeyFactory;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
 import java.text.Normalizer;
 import java.text.ParsePosition;
 import java.util.ArrayList;
@@ -96,6 +107,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.activation.DataHandler;
+import javax.activation.DataSource;
 import javax.activation.FileDataSource;
 import javax.activation.FileTypeMap;
 import javax.mail.Address;
@@ -135,12 +147,17 @@ public class MessageHelper {
     private String threadId = null;
     private InternetHeaders reportHeaders = null;
 
-    private static File cacheDir = null;
-
     static final int SMALL_MESSAGE_SIZE = 192 * 1024; // bytes
     static final int DEFAULT_DOWNLOAD_SIZE = 4 * 1024 * 1024; // bytes
     static final String HEADER_CORRELATION_ID = "X-Correlation-ID";
     static final int MAX_SUBJECT_AGE = 48; // hours
+    static final int DEFAULT_THREAD_RANGE = 7; // 2^7 = 128 days
+    static final int MAX_UNZIP_COUNT = 20;
+    static final long MAX_UNZIP_SIZE = 1000 * 1000 * 1000L;
+
+    static final List<String> UNZIP_FORMATS = BuildConfig.PLAY_STORE_RELEASE
+            ? Collections.unmodifiableList(Arrays.asList("zip"))
+            : Collections.unmodifiableList(Arrays.asList("zip, gz, tar.gz"));
 
     static final List<String> RECEIVED_WORDS = Collections.unmodifiableList(Arrays.asList(
             "from", "by", "via", "with", "id", "for"
@@ -182,6 +199,7 @@ public class MessageHelper {
     static final String FLAG_NOT_DELIVERED = "$NotDelivered";
     static final String FLAG_DISPLAYED = "$Displayed";
     static final String FLAG_NOT_DISPLAYED = "$NotDisplayed";
+    static final String FLAG_COMPLAINT = "Complaint";
     static final String FLAG_LOW_IMPORTANCE = "$LowImportance";
     static final String FLAG_HIGH_IMPORTANCE = "$HighImportance";
 
@@ -229,7 +247,7 @@ public class MessageHelper {
         System.setProperty("mail.mime.encodefilename", "false");
         System.setProperty("mail.mime.decodeparameters", "true");
         System.setProperty("mail.mime.encodeparameters", "true");
-        System.setProperty("mail.mime.allowutf8", "false"); // InternetAddress, MimeBodyPart, MimeUtility
+        System.setProperty("mail.mime.allowutf8", "false"); // InternetAddress, (MimeBodyPart: session), MimeUtility
         System.setProperty("mail.mime.cachemultipart", "false");
 
         // https://docs.oracle.com/javaee/6/api/javax/mail/internet/MimeMultipart.html
@@ -240,6 +258,9 @@ public class MessageHelper {
         System.setProperty("mail.mime.contentdisposition.strict", "false"); // default true
         //System.setProperty("mail.mime.contenttypehandler", "eu.faircode.email.ContentTypeHandler");
 
+        //System.setProperty("mail.mime.uudecode.ignoreerrors", "true");
+        System.setProperty("mail.mime.uudecode.ignoremissingbeginend", "true");
+
         //System.setProperty("mail.imap.parse.debug", "true");
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
@@ -247,11 +268,12 @@ public class MessageHelper {
         System.setProperty("fairemail.uid_command", Boolean.toString(uid_command));
     }
 
-    static Properties getSessionProperties() {
+    static Properties getSessionProperties(boolean unicode) {
         Properties props = new Properties();
 
         // MIME
-        props.put("mail.mime.allowutf8", "false"); // SMTPTransport, MimeMessage
+        // https://javaee.github.io/javamail/docs/api/javax/mail/internet/package-summary.html
+        props.put("mail.mime.allowutf8", Boolean.toString(unicode)); // SMTPTransport, MimeMessage
         props.put("mail.mime.address.strict", "false");
 
         return props;
@@ -267,6 +289,7 @@ public class MessageHelper {
         boolean autocrypt = prefs.getBoolean("autocrypt", true);
         boolean mutual = prefs.getBoolean("autocrypt_mutual", true);
         boolean encrypt_subject = prefs.getBoolean("encrypt_subject", false);
+        boolean forward_new = prefs.getBoolean("forward_new", true);
 
         Map<String, String> c = new HashMap<>();
         c.put("id", message.id == null ? null : Long.toString(message.id));
@@ -324,8 +347,13 @@ public class MessageHelper {
             }
             imessage.addHeader("References", references);
         }
+
         if (message.inreplyto != null)
             imessage.addHeader("In-Reply-To", message.inreplyto);
+
+        if (message.wasforwardedfrom != null && !forward_new)
+            imessage.addHeader("X-Forwarded-Message-Id", message.wasforwardedfrom);
+
         imessage.addHeader(HEADER_CORRELATION_ID, message.msgid);
 
         MailDateFormat mdf = new MailDateFormat();
@@ -354,7 +382,7 @@ public class MessageHelper {
         } else {
             // https://datatracker.ietf.org/doc/html/rfc2822#section-3.6.6
             ByteArrayInputStream bis = new ByteArrayInputStream(message.headers.getBytes());
-            List<Header> headers = Collections.list(new InternetHeaders(bis).getAllHeaders());
+            List<Header> headers = Collections.list(new InternetHeaders(bis, identity != null && identity.unicode).getAllHeaders());
 
             for (Header header : headers)
                 try {
@@ -912,8 +940,10 @@ public class MessageHelper {
 
         // When sending message
         if (identity != null && send) {
-            if (auto_link)
-                HtmlHelper.autoLink(document);
+            if (auto_link) {
+                HtmlHelper.guessSchemes(document);
+                HtmlHelper.autoLink(document, true);
+            }
 
             if (!TextUtils.isEmpty(compose_font)) {
                 List<Node> childs = new ArrayList<>();
@@ -1157,8 +1187,6 @@ public class MessageHelper {
         if (cake < Helper.MIN_REQUIRED_SPACE)
             throw new IOException(context.getString(R.string.app_cake),
                     new ErrnoException(context.getPackageName(), ENOSPC));
-        if (cacheDir == null)
-            cacheDir = context.getCacheDir();
         this.imessage = message;
     }
 
@@ -1169,6 +1197,10 @@ public class MessageHelper {
             Log.w(ex);
             return false;
         }
+    }
+
+    boolean getRecent() throws MessagingException {
+        return imessage.isSet(Flags.Flag.RECENT);
     }
 
     boolean getSeen() throws MessagingException {
@@ -1236,22 +1268,20 @@ public class MessageHelper {
 
         List<String> result = new ArrayList<>();
         String refs = imessage.getHeader("References", null);
-        if (refs != null)
-            result.addAll(Arrays.asList(getReferences(refs)));
+        result.addAll(getReferences(refs));
 
         // Merge references of reported message for threading
         InternetHeaders iheaders = getReportHeaders();
         if (iheaders != null) {
             String arefs = iheaders.getHeader("References", null);
-            if (arefs != null)
-                for (String ref : getReferences(arefs))
-                    if (!result.contains(ref)) {
-                        Log.i("rfc822 ref=" + ref);
-                        result.add(ref);
-                    }
+            for (String ref : getReferences(arefs))
+                if (!result.contains(ref)) {
+                    Log.i("rfc822 ref=" + ref);
+                    result.add(ref);
+                }
 
             String amsgid = iheaders.getHeader("Message-Id", null);
-            if (amsgid != null) {
+            if (!TextUtils.isEmpty(amsgid)) {
                 String msgid = MimeUtility.unfold(amsgid);
                 if (!result.contains(msgid)) {
                     Log.i("rfc822 id=" + msgid);
@@ -1263,8 +1293,17 @@ public class MessageHelper {
         return result.toArray(new String[0]);
     }
 
-    private String[] getReferences(String header) {
-        return MimeUtility.unfold(header).split("[,\\s]+");
+    private List<String> getReferences(String header) {
+        List<String> result = new ArrayList<>();
+        if (header == null)
+            return result;
+        header = MimeUtility.unfold(header);
+        if (TextUtils.isEmpty(header))
+            return result;
+        for (String ref : header.split("[,\\s]+"))
+            if (!result.contains(ref))
+                result.add(ref);
+        return result;
     }
 
     String getDeliveredTo() throws MessagingException {
@@ -1284,23 +1323,31 @@ public class MessageHelper {
     }
 
     String getInReplyTo() throws MessagingException {
+        String[] a = getInReplyTos();
+        return (a.length < 1 ? null : a[0]);
+    }
+
+    String[] getInReplyTos() throws MessagingException {
         ensureHeaders();
 
-        String header = imessage.getHeader("In-Reply-To", null);
-        if (header != null)
-            header = MimeUtility.unfold(header);
+        List<String> result = new ArrayList<>();
 
-        if (header == null) {
+        String header = imessage.getHeader("In-Reply-To", null);
+        result.addAll(getReferences(header));
+
+        if (result.size() == 0) {
             // Use reported message ID as synthetic in-reply-to
             InternetHeaders iheaders = getReportHeaders();
             if (iheaders != null) {
                 header = iheaders.getHeader("Message-Id", null);
-                if (header != null)
+                if (!TextUtils.isEmpty(header)) {
+                    result.add(header);
                     Log.i("rfc822 id=" + header);
+                }
             }
         }
 
-        return header;
+        return result.toArray(new String[0]);
     }
 
     private InternetHeaders getReportHeaders() {
@@ -1311,15 +1358,16 @@ public class MessageHelper {
                 ContentType ct = new ContentType(imessage.getContentType());
                 String reportType = ct.getParameter("report-type");
                 if ("delivery-status".equalsIgnoreCase(reportType) ||
-                        "disposition-notification".equalsIgnoreCase(reportType)) {
+                        "disposition-notification".equalsIgnoreCase(reportType) ||
+                        "feedback-report".equalsIgnoreCase(reportType)) {
                     MessageParts parts = new MessageParts();
                     getMessageParts(null, imessage, parts, null);
                     for (AttachmentPart apart : parts.attachments)
                         if ("text/rfc822-headers".equalsIgnoreCase(apart.attachment.type)) {
-                            reportHeaders = new InternetHeaders(apart.part.getInputStream());
+                            reportHeaders = new InternetHeaders(apart.part.getInputStream(), true);
                             break;
                         } else if ("message/rfc822".equalsIgnoreCase(apart.attachment.type)) {
-                            Properties props = MessageHelper.getSessionProperties();
+                            Properties props = MessageHelper.getSessionProperties(true);
                             Session isession = Session.getInstance(props, null);
                             MimeMessage amessage = new MimeMessage(isession, apart.part.getInputStream());
                             reportHeaders = amessage.getHeaders();
@@ -1334,10 +1382,10 @@ public class MessageHelper {
         return reportHeaders;
     }
 
-    String getThreadId(Context context, long account, long folder, long uid) throws MessagingException {
+    String getThreadId(Context context, long account, long folder, long uid, long received) throws MessagingException {
         if (threadId == null)
             if (true)
-                threadId = _getThreadIdAlt(context, account, folder, uid);
+                threadId = _getThreadIdAlt(context, account, folder, uid, received);
             else
                 threadId = _getThreadId(context, account, folder, uid);
         return threadId;
@@ -1364,9 +1412,9 @@ public class MessageHelper {
             if (!TextUtils.isEmpty(ref) && !refs.contains(ref))
                 refs.add(ref);
 
-        String inreplyto = getInReplyTo();
-        if (!TextUtils.isEmpty(inreplyto) && !refs.contains(inreplyto))
-            refs.add(inreplyto);
+        for (String inreplyto : getInReplyTos())
+            if (!TextUtils.isEmpty(inreplyto) && !refs.contains(inreplyto))
+                refs.add(inreplyto);
 
         DB db = DB.getInstance(context);
         List<EntityMessage> before = new ArrayList<>();
@@ -1429,7 +1477,7 @@ public class MessageHelper {
         return thread;
     }
 
-    private String _getThreadIdAlt(Context context, long account, long folder, long uid) throws MessagingException {
+    private String _getThreadIdAlt(Context context, long account, long folder, long uid, long received) throws MessagingException {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
 
         if (imessage instanceof GmailMessage) {
@@ -1479,13 +1527,30 @@ public class MessageHelper {
         if (!TextUtils.isEmpty(inreplyto) && !refs.contains(inreplyto))
             refs.add(inreplyto);
 
+        boolean forward_new = prefs.getBoolean("forward_new", true);
+        if (!forward_new)
+            try {
+                String fwd = imessage.getHeader("X-Forwarded-Message-Id", null);
+                if (!TextUtils.isEmpty(fwd) && !refs.contains(fwd))
+                    refs.add(fwd);
+            } catch (Throwable ex) {
+                Log.w(ex);
+            }
+
         DB db = DB.getInstance(context);
 
         List<String> all = new ArrayList<>(refs);
-        all.add(msgid);
+        if (!TextUtils.isEmpty(msgid))
+            all.add(msgid);
+
+        int thread_range = prefs.getInt("thread_range", MessageHelper.DEFAULT_THREAD_RANGE);
+        int range = (int) Math.pow(2, thread_range);
+        Long start = (received == 0 ? null : received - range * 24 * 3600 * 1000L);
+        Long end = (received == 0 ? null : received + range * 24 * 3600 * 1000L);
+
         List<TupleThreadInfo> infos = (all.size() == 0
                 ? new ArrayList<>()
-                : db.message().getThreadInfo(account, all));
+                : db.message().getThreadInfo(account, all, start, end));
 
         // References, In-Reply-To (sent before)
         for (TupleThreadInfo info : infos)
@@ -1504,18 +1569,18 @@ public class MessageHelper {
                 }
         }
 
-        if (thread == null && BuildConfig.DEBUG) {
+        if (thread == null && !TextUtils.isEmpty(BuildConfig.DEV_DOMAIN)) {
             String awsses = imessage.getHeader("X-SES-Outgoing", null);
             if (!TextUtils.isEmpty(awsses)) {
                 Address[] froms = getFrom();
                 if (froms != null && froms.length > 0) {
                     String from = ((InternetAddress) froms[0]).getAddress();
-                    if (!TextUtils.isEmpty(from) && from.endsWith("@faircode.eu")) {
+                    if (!TextUtils.isEmpty(from) && from.endsWith("@" + BuildConfig.DEV_DOMAIN)) {
                         Address[] rr = getReply();
                         Address[] tos = (rr != null && rr.length > 0 ? rr : getTo());
                         if (tos != null && tos.length > 0) {
                             String email = ((InternetAddress) tos[0]).getAddress();
-                            if (!TextUtils.isEmpty(email))
+                            if (!TextUtils.isEmpty(email) && !email.endsWith("@" + BuildConfig.DEV_DOMAIN))
                                 thread = "ses:" + email;
                         }
                     }
@@ -1527,11 +1592,11 @@ public class MessageHelper {
         if (thread == null && refs.size() > 0) {
             String ref = refs.get(0);
             if (!Objects.equals(ref, msgid))
-                thread = ref;
+                thread = account + ":" + ref;
         }
 
         if (thread == null)
-            thread = getHash() + ":" + uid;
+            thread = account + ":" + getHash() + ":" + uid;
 
         // Sent before
         for (TupleThreadInfo info : infos)
@@ -1671,6 +1736,7 @@ public class MessageHelper {
 
     Boolean getAutoSubmitted() throws MessagingException {
         // https://tools.ietf.org/html/rfc3834
+        // auto-generated, auto-replied
         String header = imessage.getHeader("Auto-Submitted", null);
         if (header == null) {
             // https://www.arp242.net/autoreply.html
@@ -1736,6 +1802,7 @@ public class MessageHelper {
         if (header == null)
             return null;
 
+        header = MimeUtility.unfold(header);
         header = header.toLowerCase(Locale.ROOT);
 
         int s = header.indexOf("s=");
@@ -1746,7 +1813,7 @@ public class MessageHelper {
         if (e < 0)
             e = header.length();
 
-        String selector = header.substring(s + 2, e);
+        String selector = header.substring(s + 2, e).trim();
         if (TextUtils.isEmpty(selector))
             return null;
 
@@ -1810,6 +1877,159 @@ public class MessageHelper {
 
         String spf = MimeUtility.unfold(headers[0]);
         return (spf.trim().toLowerCase(Locale.ROOT).startsWith("pass"));
+    }
+
+    boolean checkDKIMRequirements() throws MessagingException {
+        ensureHeaders();
+
+        // https://datatracker.ietf.org/doc/html/rfc6376/
+        String[] headers = imessage.getHeader("DKIM-Signature");
+        if (headers == null || headers.length < 1)
+            return false;
+
+        for (String header : headers) {
+            Map<String, String> kv = getKeyValues(MimeUtility.unfold(header));
+
+            // Algorithm
+            // https://tools.ietf.org/id/draft-ietf-dcrup-dkim-usage-03.html#rfc.section.4.3
+            String a = kv.get("a");
+            if ("rsa-sha1".equals(a))
+                return false;
+
+            // Hashed body length
+            Integer l = Helper.parseInt(kv.get("l"));
+            if (l != null && l == 0) {
+                Log.w("DKIM body length=" + l);
+                return false;
+            }
+
+            // Hashed header fields
+            String h = kv.get("h");
+            if (h == null) {
+                Log.w("DKIM header fields missing");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    boolean verifyDKIM(Context context) throws MessagingException {
+        // Proof of concept, doesn't work 100% reliable
+        if (true)
+            return true;
+
+        // https://datatracker.ietf.org/doc/html/rfc6376/
+        String[] headers = imessage.getHeader("DKIM-Signature");
+        if (headers == null || headers.length < 1)
+            return false;
+
+        for (String header : headers) {
+            Map<String, String> kv = getKeyValues(MimeUtility.unfold(header));
+
+            String a = kv.get("a");
+            if (!"rsa-sha256".equals(a))
+                return false;
+
+            try {
+                String dns = kv.get("s") + "._domainkey." + kv.get("d");
+                Log.i("DKIM lookup " + dns);
+                DnsHelper.DnsRecord[] records = DnsHelper.lookup(context, dns, "txt");
+                if (records.length > 0) {
+                    Log.i("DKIM got " + records[0].name);
+                    Map<String, String> dk = getKeyValues(records[0].name);
+
+                    Log.i("DKIM canonicalization=" + kv.get("c"));
+                    String[] c = kv.get("c").split("/");
+
+                    StringBuilder head = new StringBuilder();
+                    Log.i("DKIM headers=" + kv.get("h"));
+                    List<String> _h = new ArrayList<>();
+                    _h.addAll(Arrays.asList(kv.get("h").split(":")));
+                    _h.add("DKIM-Signature");
+                    for (String n : _h) {
+                        String[] h = ("DKIM-Signature".equals(n) ? new String[]{header} : imessage.getHeader(n));
+                        // TODO: missing header = \r\n?
+                        for (int i = h.length - 1; i >= 0; i--) {
+                            String v = h[i];
+                            if ("DKIM-Signature".equals(n)) {
+                                int b = v.lastIndexOf("b=");
+                                v = v.substring(0, b + 2);
+                                Log.i("DKIM v=" + v);
+                            }
+
+                            if ("simple".equals(c[0]))
+                                head.append(n).append(": ")
+                                        .append(v);
+                            else if ("relaxed".equals(c[0])) {
+                                v = MimeUtility.unfold(v);
+                                head.append(n.trim().toLowerCase()).append(':')
+                                        .append(v.replaceAll("\\s+", " ").trim());
+                            } else
+                                throw new IllegalArgumentException(c[0]);
+
+                            if (!"DKIM-Signature".equals(n))
+                                head.append("\r\n");
+                        }
+                    }
+                    Log.i("DKIM head=" + head.toString().replace("\r\n", "|"));
+
+                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                    Helper.copy(imessage.getRawInputStream(), bos);
+                    String body = bos.toString(); // TODO: charset
+                    if ("simple".equals(c[1])) {
+                        if (TextUtils.isEmpty(body))
+                            body = "\r\n";
+                        else if (!body.endsWith("\r\n"))
+                            body += "\r\n";
+                        else {
+                            while (body.endsWith("\r\n\r\n"))
+                                body = body.substring(0, body.length() - 2);
+                        }
+                    } else if ("relaxed".equals(c[1])) {
+                        if (TextUtils.isEmpty(body))
+                            body = "";
+                        else {
+                            body = body.replaceAll("[ \\t]+\r\n", "\r\n");
+                            body = body.replaceAll("[ \\t]+", " ");
+                            while (body.endsWith("\r\n\r\n"))
+                                body = body.substring(0, body.length() - 2);
+                            if ("\r\n".equals(body))
+                                body = "";
+                        }
+                    } else
+                        throw new IllegalArgumentException(c[1]);
+
+                    Log.i("DKIM body=" + body.replace("\r\n", "|"));
+
+                    byte[] bh = MessageDigest.getInstance("SHA-256").digest(body.getBytes());  // TODO: charset
+                    Log.i("DKIM bh=" + Base64.encodeToString(bh, Base64.NO_WRAP) + "/" + kv.get("bh"));
+
+                    String p = dk.get("p").replaceAll("\\s+", "");
+                    Log.i("DKIM pubkey=" + p);
+
+                    X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(Base64.decode(p, Base64.DEFAULT));
+                    KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+                    PublicKey pubKey = keyFactory.generatePublic(pubKeySpec);
+                    Signature sig = Signature.getInstance("SHA256withRSA"); // a=
+
+                    String s = kv.get("b").replaceAll("\\s+", "");
+                    Log.i("DKIM signature=" + s);
+
+                    byte[] signature = Base64.decode(s, Base64.DEFAULT);
+
+                    sig.initVerify(pubKey);
+                    sig.update(head.toString().getBytes());
+                    Log.i("DKIM valid=" + sig.verify(signature) +
+                            " results=" + getAuthentication("dkim", getAuthentication()) +
+                            " from=" + formatAddresses(getFrom()));
+                }
+            } catch (Throwable ex) {
+                Log.i("DKIM " + ex);
+                Log.e(ex);
+            }
+        }
+        return true;
     }
 
     Address[] getMailFrom(String[] headers) {
@@ -2028,10 +2248,11 @@ public class MessageHelper {
                 else if (unsubscribe.toLowerCase(Locale.ROOT).startsWith("mailto:")) {
                     if (mailto == null) {
                         try {
+                            unsubscribe = "mailto:" + unsubscribe.substring("mailto:".length());
                             MailTo.parse(unsubscribe);
                             mailto = unsubscribe;
                         } catch (Throwable ex) {
-                            Log.w(new Throwable(unsubscribe, ex));
+                            Log.i(new Throwable(unsubscribe, ex));
                         }
                     }
                 } else if (Helper.EMAIL_ADDRESS.matcher(unsubscribe).matches())
@@ -2050,7 +2271,7 @@ public class MessageHelper {
                             if (m.find())
                                 link = unsubscribe.substring(m.start(), m.end());
                             else
-                                Log.w(new Throwable(unsubscribe));
+                                Log.i(new Throwable(unsubscribe));
                         }
                     }
                 }
@@ -2508,7 +2729,7 @@ public class MessageHelper {
         }
     }
 
-    enum AddressFormat {NAME_ONLY, EMAIL_ONLY, NAME_EMAIL}
+    enum AddressFormat {NAME_ONLY, EMAIL_ONLY, NAME_EMAIL, EMAIL_NAME}
 
     static AddressFormat getAddressFormat(Context context) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
@@ -2579,6 +2800,8 @@ public class MessageHelper {
 
                     if (format == AddressFormat.NAME_EMAIL && !TextUtils.isEmpty(email))
                         formatted.add(personal + " <" + email + ">");
+                    else if (format == AddressFormat.EMAIL_NAME && !TextUtils.isEmpty(email))
+                        formatted.add("<" + email + "> " + personal);
                     else
                         formatted.add(personal);
                 }
@@ -2667,6 +2890,11 @@ public class MessageHelper {
                 try {
                     byte[] b1 = decodeWord(p1.text, p1.encoding, p1.charset);
                     byte[] b2 = decodeWord(p2.text, p2.encoding, p2.charset);
+                    if (CharsetHelper.isValid(b1, p1.charset) && CharsetHelper.isValid(b2, p2.charset)) {
+                        p++;
+                        continue;
+                    }
+
                     byte[] b = new byte[b1.length + b2.length];
                     System.arraycopy(b1, 0, b, 0, b1.length);
                     System.arraycopy(b2, 0, b, b1.length, b2.length);
@@ -2769,7 +2997,9 @@ public class MessageHelper {
 
         boolean isReport() {
             String ct = contentType.getBaseType();
-            return Report.isDeliveryStatus(ct) || Report.isDispositionNotification(ct);
+            return (Report.isDeliveryStatus(ct) ||
+                    Report.isDispositionNotification(ct) ||
+                    Report.isFeedbackReport(ct));
         }
     }
 
@@ -2867,6 +3097,10 @@ public class MessageHelper {
         }
 
         String getHtml(Context context, boolean plain_text) throws MessagingException, IOException {
+            return getHtml(context, plain_text, null);
+        }
+
+        String getHtml(Context context, boolean plain_text, String override) throws MessagingException, IOException {
             if (text.size() == 0) {
                 Log.i("No body part");
                 return null;
@@ -2904,10 +3138,38 @@ public class MessageHelper {
                     return null;
                 }
 
-                String result;
+                // Check character set
+                String charset = h.contentType.getParameter("charset");
+                if (UnknownCharsetProvider.charsetForMime(charset) == null)
+                    warnings.add(context.getString(R.string.title_no_charset, charset));
 
+                if (TextUtils.isEmpty(charset) ||
+                        charset.equalsIgnoreCase(StandardCharsets.US_ASCII.name()))
+                    charset = null;
+
+                Charset cs = null;
+                if (charset != null)
+                    try {
+                        cs = Charset.forName(charset);
+                    } catch (UnsupportedCharsetException ignored) {
+                        cs = null;
+                    }
+
+                String result;
                 try {
-                    Object content = h.part.getContent();
+                    Object content;
+
+                    // Check for UTF-16 LE without BOM
+                    if (StandardCharsets.UTF_16.equals(cs) && override == null) {
+                        BufferedInputStream bis = new BufferedInputStream(h.part.getDataHandler().getInputStream());
+                        if (Boolean.TRUE.equals(CharsetHelper.isUTF16LE(bis))) {
+                            Log.e("Charset " + cs + " -> UTF16LE");
+                            cs = StandardCharsets.UTF_16LE;
+                        }
+                        content = Helper.readStream(bis, cs);
+                    } else
+                        content = h.part.getContent();
+
                     Log.i("Content class=" + (content == null ? null : content.getClass().getName()));
 
                     if (content == null) {
@@ -2922,19 +3184,46 @@ public class MessageHelper {
                         // Typically com.sun.mail.util.QPDecoderStream
                         if (BuildConfig.DEBUG && false)
                             warnings.add(content.getClass().getName());
-                        Charset charset;
-                        try {
-                            String cs = h.contentType.getParameter("charset");
-                            charset = (cs == null ? StandardCharsets.ISO_8859_1 : Charset.forName(cs));
-                        } catch (Throwable ex) {
-                            Log.w(ex);
-                            charset = StandardCharsets.ISO_8859_1;
-                        }
-                        result = Helper.readStream((InputStream) content, charset);
+                        result = Helper.readStream((InputStream) content,
+                                cs == null ? StandardCharsets.ISO_8859_1 : cs);
                     } else {
-                        Log.e(content.getClass().getName());
-                        result = content.toString();
+                        result = null;
+
+                        StringBuilder m = new StringBuilder();
+                        if (content instanceof Multipart) {
+                            m.append("multipart");
+                            Multipart mp = (Multipart) content;
+                            for (int i = 0; i < mp.getCount(); i++) {
+                                BodyPart bp = mp.getBodyPart(i);
+                                try {
+                                    ContentType ct = new ContentType(bp.getContentType());
+                                    if (h.contentType.match(ct)) {
+                                        String _charset = ct.getParameter("charset");
+                                        Charset _cs = (TextUtils.isEmpty(_charset)
+                                                ? StandardCharsets.ISO_8859_1 :
+                                                Charset.forName(_charset));
+                                        result = Helper.readStream(bp.getInputStream(), _cs);
+                                    }
+                                } catch (Throwable ex) {
+                                    Log.w(ex);
+                                }
+                                m.append(" [").append(bp.getContentType()).append("]");
+                            }
+                        } else
+                            m.append(content.getClass().getName());
+
+                        String msg = "Expected " + h.contentType + " got " + m + " result=" + (result != null);
+                        Log.e(msg);
+                        warnings.add(msg);
+
+                        if (result == null)
+                            result = Helper.readStream(h.part.getInputStream(),
+                                    cs == null ? StandardCharsets.ISO_8859_1 : cs);
                     }
+                } catch (DecodingException ex) {
+                    Log.e(ex);
+                    warnings.add(Log.formatThrowable(ex, false));
+                    return null;
                 } catch (IOException | FolderClosedException | MessageRemovedException ex) {
                     throw ex;
                 } catch (Throwable ex) {
@@ -2946,40 +3235,31 @@ public class MessageHelper {
                     return null;
                 }
 
-                // Check character set
-                String charset = h.contentType.getParameter("charset");
-                if (UnknownCharsetProvider.charsetForMime(charset) == null)
-                    warnings.add(context.getString(R.string.title_no_charset, charset));
-
-                if ((TextUtils.isEmpty(charset) || charset.equalsIgnoreCase(StandardCharsets.US_ASCII.name())))
-                    charset = null;
-
-                Charset cs = null;
-                try {
-                    if (charset != null)
-                        cs = Charset.forName(charset);
-                } catch (UnsupportedCharsetException ignored) {
-                }
-
                 if (h.isPlainText()) {
-                    if (charset == null || StandardCharsets.ISO_8859_1.equals(cs)) {
-                        if (StandardCharsets.ISO_8859_1.equals(cs) && CharsetHelper.isUTF8(result)) {
-                            Log.i("Charset upgrade=UTF8");
-                            result = new String(result.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
-                        } else {
-                            Charset detected = CharsetHelper.detect(result, StandardCharsets.ISO_8859_1);
-                            if (detected == null) {
-                                if (CharsetHelper.isUTF8(result)) {
-                                    Log.i("Charset plain=UTF8");
-                                    result = new String(result.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
-                                }
+                    if (override == null) {
+                        if (cs == null || StandardCharsets.ISO_8859_1.equals(cs)) {
+                            if (StandardCharsets.ISO_8859_1.equals(cs) && CharsetHelper.isUTF8(result)) {
+                                Log.i("Charset upgrade=UTF8");
+                                result = new String(result.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
                             } else {
-                                Log.i("Charset plain=" + detected.name());
-                                result = new String(result.getBytes(StandardCharsets.ISO_8859_1), detected);
+                                Charset detected = CharsetHelper.detect(result, StandardCharsets.ISO_8859_1);
+                                if (detected == null) {
+                                    if (CharsetHelper.isUTF8(result)) {
+                                        Log.i("Charset plain=UTF8");
+                                        result = new String(result.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
+                                    }
+                                } else {
+                                    Log.i("Charset plain=" + detected.name());
+                                    result = new String(result.getBytes(StandardCharsets.ISO_8859_1), detected);
+                                }
                             }
-                        }
-                    } else if (StandardCharsets.UTF_8.equals(cs))
-                        result = CharsetHelper.utf8toW1252(result);
+                        } else if (StandardCharsets.UTF_8.equals(cs))
+                            result = CharsetHelper.utf8toW1252(result);
+                    } else {
+                        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                        Helper.copy(h.part.getDataHandler().getInputStream(), bos);
+                        result = bos.toString(override);
+                    }
 
                     // https://datatracker.ietf.org/doc/html/rfc3676
                     if ("flowed".equalsIgnoreCase(h.contentType.getParameter("format")))
@@ -3010,94 +3290,101 @@ public class MessageHelper {
 
                     result = "<div x-plain=\"true\">" + HtmlHelper.formatPlainText(result) + "</div>";
                 } else if (h.isHtml()) {
-                    // Conditionally upgrade to UTF8
-                    if ((cs == null ||
-                            StandardCharsets.US_ASCII.equals(cs) ||
-                            StandardCharsets.ISO_8859_1.equals(cs)) &&
-                            CharsetHelper.isUTF8(result))
-                        result = new String(result.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
+                    if (override == null) {
+                        // Conditionally upgrade to UTF8
+                        if ((cs == null ||
+                                StandardCharsets.US_ASCII.equals(cs) ||
+                                StandardCharsets.ISO_8859_1.equals(cs)) &&
+                                CharsetHelper.isUTF8(result))
+                            result = new String(result.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
 
-                    //if (StandardCharsets.UTF_8.equals(cs))
-                    //    result = CharsetHelper.utf8w1252(result);
+                        //if (StandardCharsets.UTF_8.equals(cs))
+                        //    result = CharsetHelper.utf8w1252(result);
 
-                    // Fix incorrect UTF16
-                    try {
-                        if (CHARSET16.contains(cs)) {
-                            Charset detected = CharsetHelper.detect(result, cs);
-                            if (!CHARSET16.contains(detected))
-                                Log.w(new Throwable("Charset=" + cs + " detected=" + detected));
-                            if (StandardCharsets.US_ASCII.equals(detected) ||
-                                    StandardCharsets.UTF_8.equals(detected)) {
-                                charset = null;
-                                result = new String(result.getBytes(cs), detected);
+                        // Fix incorrect UTF16
+                        try {
+                            if (CHARSET16.contains(cs)) {
+                                Charset detected = CharsetHelper.detect(result, cs);
+                                if (!CHARSET16.contains(detected))
+                                    Log.w(new Throwable("Charset=" + cs + " detected=" + detected));
+                                // UTF-16 can be detected as US-ASCII
+                                if (StandardCharsets.UTF_8.equals(detected)) {
+                                    cs = null;
+                                    result = new String(result.getBytes(cs), detected);
+                                }
+                            }
+                        } catch (Throwable ex) {
+                            Log.w(ex);
+                        }
+
+                        if (cs == null) {
+                            // <meta charset="utf-8" />
+                            // <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+                            String excerpt = result.substring(0, Math.min(MAX_META_EXCERPT, result.length()));
+                            Document d = JsoupEx.parse(excerpt);
+                            for (Element meta : d.select("meta")) {
+                                String mcharset = null;
+                                if ("Content-Type".equalsIgnoreCase(meta.attr("http-equiv"))) {
+                                    try {
+                                        ContentType ct = new ContentType(meta.attr("content"));
+                                        mcharset = ct.getParameter("charset");
+                                    } catch (ParseException ex) {
+                                        Log.w(ex);
+                                    }
+                                } else
+                                    mcharset = meta.attr("charset");
+
+                                if (!TextUtils.isEmpty(mcharset))
+                                    try {
+                                        Log.i("Charset meta=" + meta);
+                                        Charset c = Charset.forName(mcharset);
+
+                                        // US-ASCII is a subset of ISO8859-1
+                                        if (StandardCharsets.US_ASCII.equals(c))
+                                            break;
+
+                                        // Check if really UTF-8
+                                        if (StandardCharsets.UTF_8.equals(c) && !CharsetHelper.isUTF8(result)) {
+                                            Log.w("Charset meta=" + meta + " !isUTF8");
+                                            break;
+                                        }
+
+                                        // 16 bits charsets cannot be converted to 8 bits
+                                        if (CHARSET16.contains(c)) {
+                                            Log.w("Charset meta=" + meta);
+                                            break;
+                                        }
+
+                                        Charset detected = CharsetHelper.detect(result, c);
+                                        if (c.equals(detected))
+                                            break;
+
+                                        // Common detected/meta
+                                        // - windows-1250, windows-1257 / ISO-8859-1
+                                        // - ISO-8859-1 / windows-1252
+                                        // - US-ASCII / windows-1250, windows-1252, ISO-8859-1, ISO-8859-15, UTF-8
+
+                                        if (StandardCharsets.US_ASCII.equals(detected) &&
+                                                ("ISO-8859-15".equals(c.name()) ||
+                                                        "windows-1250".equals(c.name()) ||
+                                                        "windows-1252".equals(c.name()) ||
+                                                        StandardCharsets.UTF_8.equals(c) ||
+                                                        StandardCharsets.ISO_8859_1.equals(c)))
+                                            break;
+
+                                        // Convert
+                                        Log.w("Converting detected=" + detected + " meta=" + c);
+                                        result = new String(result.getBytes(StandardCharsets.ISO_8859_1), c);
+                                        break;
+                                    } catch (Throwable ex) {
+                                        Log.e(ex);
+                                    }
                             }
                         }
-                    } catch (Throwable ex) {
-                        Log.w(ex);
-                    }
-
-                    if (charset == null) {
-                        // <meta charset="utf-8" />
-                        // <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-                        String excerpt = result.substring(0, Math.min(MAX_META_EXCERPT, result.length()));
-                        Document d = JsoupEx.parse(excerpt);
-                        for (Element meta : d.select("meta")) {
-                            if ("Content-Type".equalsIgnoreCase(meta.attr("http-equiv"))) {
-                                try {
-                                    ContentType ct = new ContentType(meta.attr("content"));
-                                    charset = ct.getParameter("charset");
-                                } catch (ParseException ex) {
-                                    Log.w(ex);
-                                }
-                            } else
-                                charset = meta.attr("charset");
-
-                            if (!TextUtils.isEmpty(charset))
-                                try {
-                                    Log.i("Charset meta=" + meta);
-                                    Charset c = Charset.forName(charset);
-
-                                    // US-ASCII is a subset of ISO8859-1
-                                    if (StandardCharsets.US_ASCII.equals(c))
-                                        break;
-
-                                    // Check if really UTF-8
-                                    if (StandardCharsets.UTF_8.equals(c) && !CharsetHelper.isUTF8(result)) {
-                                        Log.w("Charset meta=" + meta + " !isUTF8");
-                                        break;
-                                    }
-
-                                    // 16 bits charsets cannot be converted to 8 bits
-                                    if (CHARSET16.contains(c)) {
-                                        Log.w("Charset meta=" + meta);
-                                        break;
-                                    }
-
-                                    Charset detected = CharsetHelper.detect(result, c);
-                                    if (c.equals(detected))
-                                        break;
-
-                                    // Common detected/meta
-                                    // - windows-1250, windows-1257 / ISO-8859-1
-                                    // - ISO-8859-1 / windows-1252
-                                    // - US-ASCII / windows-1250, windows-1252, ISO-8859-1, ISO-8859-15, UTF-8
-
-                                    if (StandardCharsets.US_ASCII.equals(detected) &&
-                                            ("ISO-8859-15".equals(c.name()) ||
-                                                    "windows-1250".equals(c.name()) ||
-                                                    "windows-1252".equals(c.name()) ||
-                                                    StandardCharsets.UTF_8.equals(c) ||
-                                                    StandardCharsets.ISO_8859_1.equals(c)))
-                                        break;
-
-                                    // Convert
-                                    Log.w("Converting detected=" + detected + " meta=" + c);
-                                    result = new String(result.getBytes(StandardCharsets.ISO_8859_1), c);
-                                    break;
-                                } catch (Throwable ex) {
-                                    Log.e(ex);
-                                }
-                        }
+                    } else {
+                        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                        Helper.copy(h.part.getDataHandler().getInputStream(), bos);
+                        result = bos.toString(override);
                     }
                 } else if (h.isReport()) {
                     Report report = new Report(h.contentType.getBaseType(), result);
@@ -3123,6 +3410,11 @@ public class MessageHelper {
                     if (report.isDispositionNotification() && !report.isMdnDisplayed()) {
                         if (report.disposition != null)
                             w.append(report.disposition);
+                    }
+
+                    if (report.isFeedbackReport()) {
+                        if (!TextUtils.isEmpty(report.feedback))
+                            w.append(report.feedback);
                     }
 
                     if (w.length() > 0)
@@ -3269,7 +3561,7 @@ public class MessageHelper {
 
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 apart.part.writeTo(bos);
-                String raw = new String(bos.toByteArray());
+                String raw = new String(bos.toByteArray(), StandardCharsets.ISO_8859_1);
                 String[] parts = raw.split("\\r?\\n" + Pattern.quote("--" + boundary) + "\\r?\\n");
                 if (parts.length < 2)
                     throw new ParseException("Signed part missing");
@@ -3282,7 +3574,7 @@ public class MessageHelper {
                     c = c.replaceAll(" +$", ""); // trim trailing spaces
 
                 try (OutputStream os = new FileOutputStream(file)) {
-                    os.write(c.getBytes());
+                    os.write(c.getBytes(StandardCharsets.ISO_8859_1));
                 }
 
                 db.attachment().setDownloaded(local.id, file.length());
@@ -3331,7 +3623,7 @@ public class MessageHelper {
 
                 if ("message/rfc822".equals(local.type))
                     try (FileInputStream fis = new FileInputStream(local.getFile(context))) {
-                        Properties props = MessageHelper.getSessionProperties();
+                        Properties props = MessageHelper.getSessionProperties(true);
                         Session isession = Session.getInstance(props, null);
                         MimeMessage imessage = new MimeMessage(isession, fis);
                         MessageHelper helper = new MessageHelper(imessage, context);
@@ -3364,7 +3656,166 @@ public class MessageHelper {
                             }
                     } catch (Throwable ex) {
                         Log.e(ex);
+                        if (ex instanceof ArchiveException)
+                            db.attachment().setWarning(local.id, ex.getMessage());
+                        else
+                            db.attachment().setWarning(local.id, Log.formatThrowable(ex));
                     }
+
+                else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && local.isCompressed()) {
+                    // https://commons.apache.org/proper/commons-compress/examples.html
+                    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+                    boolean unzip = prefs.getBoolean("unzip", !BuildConfig.PLAY_STORE_RELEASE);
+
+                    if (unzip)
+                        if (local.isGzip() && !local.isTarGzip())
+                            try (GzipCompressorInputStream gzip = new GzipCompressorInputStream(
+                                    new BufferedInputStream(new FileInputStream(local.getFile(context))))) {
+                                String name = gzip.getMetaData().getFilename();
+                                long total = gzip.getUncompressedCount();
+
+                                Log.i("Gzipped attachment seq=" + local.sequence + " " + name + ":" + total);
+
+                                if (total <= MAX_UNZIP_SIZE) {
+                                    if (name == null &&
+                                            local.name != null && local.name.endsWith(".gz"))
+                                        name = local.name.substring(0, local.name.length() - 3);
+
+                                    EntityAttachment attachment = new EntityAttachment();
+                                    attachment.message = local.message;
+                                    attachment.sequence = local.sequence;
+                                    attachment.subsequence = 1;
+                                    attachment.name = name;
+                                    attachment.type = Helper.guessMimeType(name);
+                                    if (total >= 0)
+                                        attachment.size = total;
+                                    attachment.id = db.attachment().insertAttachment(attachment);
+
+                                    File efile = attachment.getFile(context);
+                                    Log.i("Gunzipping to " + efile);
+
+                                    int last = 0;
+                                    long size = 0;
+                                    try (OutputStream os = new FileOutputStream(efile)) {
+                                        byte[] buffer = new byte[Helper.BUFFER_SIZE];
+                                        for (int len = gzip.read(buffer); len != -1; len = gzip.read(buffer)) {
+                                            size += len;
+                                            if (size > MAX_UNZIP_SIZE)
+                                                throw new IOException("File too large");
+                                            os.write(buffer, 0, len);
+
+                                            if (total > 0) {
+                                                int progress = (int) (size * 100 / total);
+                                                if (progress / 20 > last / 20) {
+                                                    last = progress;
+                                                    db.attachment().setProgress(attachment.id, progress);
+                                                }
+                                            }
+                                        }
+                                    } catch (Throwable ex) {
+                                        Log.e(ex);
+                                        db.attachment().setError(attachment.id, Log.formatThrowable(ex));
+                                        db.attachment().setAvailable(attachment.id, true); // unrecoverable
+                                    }
+
+                                    db.attachment().setDownloaded(attachment.id, efile.length());
+                                }
+                            } catch (Throwable ex) {
+                                Log.e(new Throwable(local.name, ex));
+                                db.attachment().setWarning(local.id, Log.formatThrowable(ex));
+                            }
+                        else
+                            try (FileInputStream fis = new FileInputStream(local.getFile(context))) {
+                                ArchiveInputStream ais = new ArchiveStreamFactory().createArchiveInputStream(
+                                        new BufferedInputStream(local.isTarGzip() ? new GzipCompressorInputStream(fis) : fis));
+
+                                int count = 0;
+                                ArchiveEntry entry;
+                                while ((entry = ais.getNextEntry()) != null)
+                                    if (ais.canReadEntryData(entry) && !entry.isDirectory()) {
+                                        if (entry.getSize() > MAX_UNZIP_SIZE)
+                                            count = MAX_UNZIP_COUNT;
+                                        if (++count > MAX_UNZIP_COUNT)
+                                            break;
+                                    }
+
+                                Log.i("Zip entries=" + count);
+                                if (count <= MAX_UNZIP_COUNT) {
+                                    fis.getChannel().position(0);
+
+                                    ais = new ArchiveStreamFactory().createArchiveInputStream(
+                                            new BufferedInputStream(local.isTarGzip() ? new GzipCompressorInputStream(fis) : fis));
+
+                                    int subsequence = 1;
+                                    while ((entry = ais.getNextEntry()) != null) {
+                                        if (!ais.canReadEntryData(entry)) {
+                                            Log.w("Zip invalid=" + entry);
+                                            continue;
+                                        }
+
+                                        String name = entry.getName();
+                                        long total = entry.getSize();
+
+                                        if (entry.isDirectory() ||
+                                                (name != null && name.endsWith("\\"))) {
+                                            Log.i("Zipped folder=" + name);
+                                            continue;
+                                        }
+
+                                        Log.i("Zipped attachment seq=" + local.sequence + ":" + subsequence +
+                                                " " + name + ":" + total);
+
+                                        EntityAttachment attachment = new EntityAttachment();
+                                        attachment.message = local.message;
+                                        attachment.sequence = local.sequence;
+                                        attachment.subsequence = subsequence++;
+                                        attachment.name = name;
+                                        attachment.type = Helper.guessMimeType(name);
+                                        if (total >= 0)
+                                            attachment.size = total;
+                                        attachment.id = db.attachment().insertAttachment(attachment);
+
+                                        File efile = attachment.getFile(context);
+                                        Log.i("Unzipping to " + efile);
+
+                                        int last = 0;
+                                        long size = 0;
+                                        try (OutputStream os = new FileOutputStream(efile)) {
+                                            byte[] buffer = new byte[Helper.BUFFER_SIZE];
+                                            for (int len = ais.read(buffer); len != -1; len = ais.read(buffer)) {
+                                                size += len;
+                                                if (size > MAX_UNZIP_SIZE)
+                                                    throw new IOException("File too large");
+                                                os.write(buffer, 0, len);
+
+                                                if (total > 0) {
+                                                    int progress = (int) (size * 100 / total);
+                                                    if (progress / 20 > last / 20) {
+                                                        last = progress;
+                                                        db.attachment().setProgress(attachment.id, progress);
+                                                    }
+                                                }
+                                            }
+                                        } catch (Throwable ex) {
+                                            Log.e(ex);
+                                            db.attachment().setError(attachment.id, Log.formatThrowable(ex));
+                                            db.attachment().setAvailable(attachment.id, true); // unrecoverable
+                                        }
+
+                                        db.attachment().setDownloaded(attachment.id, efile.length());
+                                    }
+                                }
+                            } catch (Throwable ex) {
+                                Log.e(new Throwable(local.name, ex));
+                                // ArchiveException: Unsupported feature encryption used in entry ...
+                                // UnsupportedZipFeatureException: No Archiver found for the stream signature
+                                if (ex instanceof ArchiveException ||
+                                        ex instanceof UnsupportedZipFeatureException)
+                                    db.attachment().setWarning(local.id, ex.getMessage());
+                                else
+                                    db.attachment().setWarning(local.id, Log.formatThrowable(ex));
+                            }
+                }
             }
         }
 
@@ -3388,8 +3839,13 @@ public class MessageHelper {
                     attachment.disposition = Part.ATTACHMENT;
                     attachment.id = db.attachment().insertAttachment(attachment);
 
-                    Helper.writeText(attachment.getFile(context), subject);
-                    db.attachment().setDownloaded(attachment.id, (long) subject.length());
+                    try {
+                        Helper.writeText(attachment.getFile(context), subject);
+                        db.attachment().setDownloaded(attachment.id, (long) subject.length());
+                    } catch (Throwable ex) {
+                        Log.e(ex);
+                        db.attachment().setError(attachment.id, Log.formatThrowable(ex));
+                    }
                 }
 
                 String body = msg.getBody();
@@ -3413,9 +3869,14 @@ public class MessageHelper {
                         attachment.disposition = Part.ATTACHMENT;
                         attachment.id = db.attachment().insertAttachment(attachment);
 
-                        byte[] data = attr.getData();
-                        Helper.writeText(attachment.getFile(context), new String(data));
-                        db.attachment().setDownloaded(attachment.id, (long) data.length);
+                        try {
+                            byte[] data = attr.getData();
+                            Helper.writeText(attachment.getFile(context), new String(data));
+                            db.attachment().setDownloaded(attachment.id, (long) data.length);
+                        } catch (Throwable ex) {
+                            Log.e(ex);
+                            db.attachment().setError(attachment.id, Log.formatThrowable(ex));
+                        }
                     }
                 } else {
                     EntityAttachment attachment = new EntityAttachment();
@@ -3427,30 +3888,35 @@ public class MessageHelper {
                     attachment.disposition = Part.ATTACHMENT;
                     attachment.id = db.attachment().insertAttachment(attachment);
 
-                    Helper.writeText(attachment.getFile(context), body);
-                    db.attachment().setDownloaded(attachment.id, (long) body.length());
+                    try {
+                        Helper.writeText(attachment.getFile(context), body);
+                        db.attachment().setDownloaded(attachment.id, (long) body.length());
+                    } catch (Throwable ex) {
+                        Log.e(ex);
+                        db.attachment().setError(attachment.id, Log.formatThrowable(ex));
+                    }
                 }
 
-                for (org.apache.poi.hmef.Attachment at : msg.getAttachments())
+                for (org.apache.poi.hmef.Attachment at : msg.getAttachments()) {
+                    String filename = at.getLongFilename();
+                    if (filename == null)
+                        filename = at.getFilename();
+                    if (filename == null) {
+                        String ext = at.getExtension();
+                        if (ext != null)
+                            filename = "document." + ext;
+                    }
+
+                    EntityAttachment attachment = new EntityAttachment();
+                    attachment.message = local.message;
+                    attachment.sequence = local.sequence;
+                    attachment.subsequence = ++subsequence;
+                    attachment.name = filename;
+                    attachment.type = Helper.guessMimeType(attachment.name);
+                    attachment.disposition = Part.ATTACHMENT;
+                    attachment.id = db.attachment().insertAttachment(attachment);
+
                     try {
-                        String filename = at.getLongFilename();
-                        if (filename == null)
-                            filename = at.getFilename();
-                        if (filename == null) {
-                            String ext = at.getExtension();
-                            if (ext != null)
-                                filename = "document." + ext;
-                        }
-
-                        EntityAttachment attachment = new EntityAttachment();
-                        attachment.message = local.message;
-                        attachment.sequence = local.sequence;
-                        attachment.subsequence = ++subsequence;
-                        attachment.name = filename;
-                        attachment.type = Helper.guessMimeType(attachment.name);
-                        attachment.disposition = Part.ATTACHMENT;
-                        attachment.id = db.attachment().insertAttachment(attachment);
-
                         byte[] data = at.getContents();
                         try (OutputStream os = new FileOutputStream(attachment.getFile(context))) {
                             os.write(data);
@@ -3460,7 +3926,9 @@ public class MessageHelper {
                     } catch (Throwable ex) {
                         // java.lang.IllegalArgumentException: Attachment corrupt - no Data section
                         Log.e(ex);
+                        db.attachment().setError(attachment.id, Log.formatThrowable(ex));
                     }
+                }
 
                 StringBuilder sb = new StringBuilder();
                 for (org.apache.poi.hmef.attribute.TNEFAttribute attr : msg.getMessageAttributes())
@@ -3479,8 +3947,13 @@ public class MessageHelper {
                     attachment.disposition = Part.ATTACHMENT;
                     attachment.id = db.attachment().insertAttachment(attachment);
 
-                    Helper.writeText(attachment.getFile(context), sb.toString());
-                    db.attachment().setDownloaded(attachment.id, (long) sb.length());
+                    try {
+                        Helper.writeText(attachment.getFile(context), sb.toString());
+                        db.attachment().setDownloaded(attachment.id, (long) sb.length());
+                    } catch (Throwable ex) {
+                        Log.e(ex);
+                        db.attachment().setError(attachment.id, Log.formatThrowable(ex));
+                    }
                 }
             } catch (Throwable ex) {
                 Log.w(ex);
@@ -3624,6 +4097,10 @@ public class MessageHelper {
 
                 if (part.isMimeType("multipart/mixed")) {
                     Object content = part.getContent();
+
+                    if (content instanceof String)
+                        content = tryParseMultipart((String) content, part.getContentType());
+
                     if (content instanceof Multipart) {
                         Multipart mp = (Multipart) content;
                         for (int i = 0; i < mp.getCount(); i++) {
@@ -3633,8 +4110,11 @@ public class MessageHelper {
                                 break;
                             }
                         }
-                    } else
-                        throw new MessagingStructureException(content);
+                    } else {
+                        String msg = "Expected multipart/mixed got " + content.getClass().getName();
+                        Log.e(msg);
+                        parts.warnings.add(msg);
+                    }
                 }
 
                 if (part.isMimeType("multipart/signed")) {
@@ -3644,6 +4124,10 @@ public class MessageHelper {
                             "application/pkcs7-signature".equals(protocol) ||
                             "application/x-pkcs7-signature".equals(protocol)) {
                         Object content = part.getContent();
+
+                        if (content instanceof String)
+                            content = tryParseMultipart((String) content, part.getContentType());
+
                         if (content instanceof Multipart) {
                             Multipart multipart = (Multipart) content;
                             if (multipart.getCount() == 2) {
@@ -3678,8 +4162,11 @@ public class MessageHelper {
                                     sb.append(' ').append(i).append('=').append(multipart.getBodyPart(i).getContentType());
                                 Log.e(sb.toString());
                             }
-                        } else
-                            throw new MessagingStructureException(content);
+                        } else {
+                            String msg = "Expected multipart/signed got " + content.getClass().getName();
+                            Log.e(msg);
+                            parts.warnings.add(msg);
+                        }
                     } else
                         Log.e(ct.toString());
                 } else if (part.isMimeType("multipart/encrypted")) {
@@ -3687,6 +4174,10 @@ public class MessageHelper {
                     String protocol = ct.getParameter("protocol");
                     if ("application/pgp-encrypted".equals(protocol) || protocol == null) {
                         Object content = part.getContent();
+
+                        if (content instanceof String)
+                            content = tryParseMultipart((String) content, part.getContentType());
+
                         if (content instanceof Multipart) {
                             Multipart multipart = (Multipart) content;
                             if (multipart.getCount() == 2) {
@@ -3700,8 +4191,12 @@ public class MessageHelper {
                                     sb.append(' ').append(i).append('=').append(multipart.getBodyPart(i).getContentType());
                                 Log.e(sb.toString());
                             }
-                        } else
-                            throw new MessagingStructureException(content);
+                        } else {
+                            String msg = "Expected multipart/encrypted got " + content.getClass().getName();
+                            Log.e(msg);
+                            parts.warnings.add(msg);
+
+                        }
                     } else
                         Log.e(ct.toString());
                 } else if (part.isMimeType("application/pkcs7-mime") ||
@@ -3764,9 +4259,10 @@ public class MessageHelper {
         try {
             Log.d("Part class=" + part.getClass() + " type=" + part.getContentType());
 
-            // https://github.com/autocrypt/protected-headers
             try {
                 ContentType ct = new ContentType(part.getContentType());
+
+                // https://github.com/autocrypt/protected-headers
                 if ("v1".equals(ct.getParameter("protected-headers"))) {
                     String[] subject = part.getHeader("subject");
                     if (subject != null && subject.length != 0) {
@@ -3774,6 +4270,19 @@ public class MessageHelper {
                         parts.protected_subject = decodeMime(subject[0]);
                     }
                 }
+
+                // https://en.wikipedia.org/wiki/MIME#Multipart_subtypes
+                if ("multipart".equals(ct.getPrimaryType()) &&
+                        !("mixed".equalsIgnoreCase(ct.getSubType()) ||
+                                "alternative".equalsIgnoreCase(ct.getSubType()) ||
+                                "related".equalsIgnoreCase(ct.getSubType()) ||
+                                "report".equalsIgnoreCase(ct.getSubType()) ||
+                                "parallel".equalsIgnoreCase(ct.getSubType()) ||
+                                "digest".equalsIgnoreCase(ct.getSubType()) ||
+                                "appledouble".equalsIgnoreCase(ct.getSubType()) ||
+                                "voice-message".equalsIgnoreCase(ct.getSubType())))
+                    // voice-message: https://www.rfc-editor.org/rfc/rfc3458.txt
+                    Log.e(part.getContentType());
             } catch (Throwable ex) {
                 Log.e(ex);
             }
@@ -3781,145 +4290,154 @@ public class MessageHelper {
             if (part.isMimeType("multipart/*")) {
                 Multipart multipart;
                 Object content = part.getContent(); // Should always be Multipart
-                if (content instanceof Multipart)
-                    multipart = (Multipart) part.getContent();
-                else
-                    throw new MessagingStructureException(content);
 
-                int count = multipart.getCount();
-                for (int i = 0; i < count; i++)
-                    try {
-                        BodyPart child = multipart.getBodyPart(i);
-                        getMessageParts(part, child, parts, encrypt);
-                    } catch (ParseException ex) {
-                        // Nested body: try to continue
-                        // ParseException: In parameter list boundary="...">, expected parameter name, got ";"
-                        Log.w(ex);
-                        parts.warnings.add(Log.formatThrowable(ex, false));
-                    }
-            } else {
-                // https://www.iana.org/assignments/cont-disp/cont-disp.xhtml
-                String disposition;
-                try {
-                    // From the body structure
-                    disposition = part.getDisposition();
-                    if (disposition != null)
-                        disposition = disposition.toLowerCase(Locale.ROOT);
-                } catch (MessagingException ex) {
-                    Log.w(ex);
-                    parts.warnings.add(Log.formatThrowable(ex, false));
-                    disposition = null;
-                }
+                if (content instanceof String)
+                    content = tryParseMultipart((String) content, part.getContentType());
 
-                String filename;
-                try {
-                    // From the body structure:
-                    // 1. disposition filename
-                    // 2. content type name
-                    filename = part.getFileName(); // IMAPBodyPart/BODYSTRUCTURE
-                    if (filename != null) {
-                        // https://tools.ietf.org/html/rfc2231
-                        // http://kb.mozillazine.org/Attachments_renamed
-                        // https://blog.nodemailer.com/2017/01/27/the-mess-that-is-attachment-filenames/
-                        int q1 = filename.indexOf('\'');
-                        int q2 = filename.indexOf('\'', q1 + 1);
-                        if (q1 >= 0 && q2 > 0) {
-                            try {
-                                String charset = filename.substring(0, q1);
-                                String language = filename.substring(q1 + 1, q2);
-                                String name = filename.substring(q2 + 1)
-                                        .replace("+", "%2B");
-
-                                if (!TextUtils.isEmpty(charset))
-                                    filename = URLDecoder.decode(name, charset);
-                            } catch (Throwable ex) {
-                                Log.e(ex);
-                            }
+                if (content instanceof Multipart) {
+                    multipart = (Multipart) content;
+                    int count = multipart.getCount();
+                    for (int i = 0; i < count; i++)
+                        try {
+                            BodyPart child = multipart.getBodyPart(i);
+                            getMessageParts(part, child, parts, encrypt);
+                        } catch (ParseException ex) {
+                            // Nested body: try to continue
+                            // ParseException: In parameter list boundary="...">, expected parameter name, got ";"
+                            Log.w(ex);
+                            parts.warnings.add(Log.formatThrowable(ex, false));
                         }
-
-                        filename = decodeMime(filename);
-                    }
-                } catch (MessagingException ex) {
-                    Log.w(ex);
-                    parts.warnings.add(Log.formatThrowable(ex, false));
-                    filename = null;
-                }
-
-                ContentType contentType;
-                try {
-                    // From the body structure
-                    contentType = new ContentType(part.getContentType());
-                } catch (ParseException ex) {
-                    if (part instanceof MimeMessage)
-                        Log.w("MimeMessage content type=" + ex.getMessage());
-                    else
-                        Log.w(ex);
-                    contentType = new ContentType(Helper.guessMimeType(filename));
-                }
-
-                String ct = contentType.getBaseType();
-                if (("text/plain".equalsIgnoreCase(ct) || "text/html".equalsIgnoreCase(ct)) &&
-                        !Part.ATTACHMENT.equalsIgnoreCase(disposition) && TextUtils.isEmpty(filename)) {
-                    parts.text.add(new PartHolder(part, contentType));
+                    return;
                 } else {
-                    if (Report.isDeliveryStatus(ct) || Report.isDispositionNotification(ct))
-                        parts.extra.add(new PartHolder(part, contentType));
+                    String msg = "Expected multipart/* got " + content.getClass().getName();
+                    Log.e(msg);
+                    parts.warnings.add(msg);
+                }
+            }
 
-                    AttachmentPart apart = new AttachmentPart();
-                    apart.disposition = disposition;
-                    apart.filename = filename;
-                    apart.encrypt = encrypt;
-                    apart.part = part;
+            // https://www.iana.org/assignments/cont-disp/cont-disp.xhtml
+            String disposition;
+            try {
+                // From the body structure
+                disposition = part.getDisposition();
+                if (disposition != null)
+                    disposition = disposition.toLowerCase(Locale.ROOT);
+            } catch (MessagingException ex) {
+                Log.w(ex);
+                parts.warnings.add(Log.formatThrowable(ex, false));
+                disposition = null;
+            }
 
-                    String cid = null;
-                    try {
-                        if (apart.part instanceof IMAPBodyPart)
-                            cid = ((IMAPBodyPart) apart.part).getContentID();
-                        if (TextUtils.isEmpty(cid)) {
-                            String[] cids = apart.part.getHeader("Content-ID");
-                            if (cids != null && cids.length > 0)
-                                cid = MimeUtility.unfold(cids[0]);
+            String filename;
+            try {
+                // From the body structure:
+                // 1. disposition filename
+                // 2. content type name
+                filename = part.getFileName(); // IMAPBodyPart/BODYSTRUCTURE
+                if (filename != null) {
+                    // https://tools.ietf.org/html/rfc2231
+                    // http://kb.mozillazine.org/Attachments_renamed
+                    // https://blog.nodemailer.com/2017/01/27/the-mess-that-is-attachment-filenames/
+                    int q1 = filename.indexOf('\'');
+                    int q2 = filename.indexOf('\'', q1 + 1);
+                    if (q1 >= 0 && q2 > 0) {
+                        try {
+                            String charset = filename.substring(0, q1);
+                            String language = filename.substring(q1 + 1, q2);
+                            String name = filename.substring(q2 + 1)
+                                    .replace("+", "%2B");
+
+                            if (!TextUtils.isEmpty(charset))
+                                filename = URLDecoder.decode(name, charset);
+                        } catch (Throwable ex) {
+                            Log.e(ex);
                         }
+                    }
+
+                    filename = decodeMime(filename);
+                }
+            } catch (MessagingException ex) {
+                Log.w(ex);
+                parts.warnings.add(Log.formatThrowable(ex, false));
+                filename = null;
+            }
+
+            ContentType contentType;
+            try {
+                // From the body structure
+                contentType = new ContentType(part.getContentType());
+            } catch (ParseException ex) {
+                if (part instanceof MimeMessage)
+                    Log.w("MimeMessage content type=" + ex.getMessage());
+                else
+                    Log.w(ex);
+                contentType = new ContentType(Helper.guessMimeType(filename));
+            }
+
+            String ct = contentType.getBaseType();
+            if (("text/plain".equalsIgnoreCase(ct) || "text/html".equalsIgnoreCase(ct)) &&
+                    !Part.ATTACHMENT.equalsIgnoreCase(disposition) && TextUtils.isEmpty(filename)) {
+                parts.text.add(new PartHolder(part, contentType));
+            } else {
+                if (Report.isDeliveryStatus(ct) ||
+                        Report.isDispositionNotification(ct) ||
+                        Report.isFeedbackReport(ct))
+                    parts.extra.add(new PartHolder(part, contentType));
+
+                AttachmentPart apart = new AttachmentPart();
+                apart.disposition = disposition;
+                apart.filename = filename;
+                apart.encrypt = encrypt;
+                apart.part = part;
+
+                String cid = null;
+                try {
+                    if (apart.part instanceof IMAPBodyPart)
+                        cid = ((IMAPBodyPart) apart.part).getContentID();
+                    if (TextUtils.isEmpty(cid)) {
+                        String[] cids = apart.part.getHeader("Content-ID");
+                        if (cids != null && cids.length > 0)
+                            cid = MimeUtility.unfold(cids[0]);
+                    }
+                } catch (MessagingException ex) {
+                    Log.w(ex);
+                    if (!"Failed to fetch headers".equals(ex.getMessage()))
+                        parts.warnings.add(Log.formatThrowable(ex, false));
+                }
+
+                Boolean related = null;
+                if (parent != null)
+                    try {
+                        related = parent.isMimeType("multipart/related");
                     } catch (MessagingException ex) {
                         Log.w(ex);
-                        if (!"Failed to fetch headers".equals(ex.getMessage()))
-                            parts.warnings.add(Log.formatThrowable(ex, false));
                     }
 
-                    Boolean related = null;
-                    if (parent != null)
-                        try {
-                            related = parent.isMimeType("multipart/related");
-                        } catch (MessagingException ex) {
-                            Log.w(ex);
-                        }
+                apart.attachment = new EntityAttachment();
+                apart.attachment.disposition = apart.disposition;
+                apart.attachment.name = apart.filename;
+                apart.attachment.type = contentType.getBaseType().toLowerCase(Locale.ROOT);
+                apart.attachment.size = (long) apart.part.getSize();
+                apart.attachment.cid = cid;
+                apart.attachment.related = related;
+                apart.attachment.encryption = apart.encrypt;
 
-                    apart.attachment = new EntityAttachment();
-                    apart.attachment.disposition = apart.disposition;
-                    apart.attachment.name = apart.filename;
-                    apart.attachment.type = contentType.getBaseType().toLowerCase(Locale.ROOT);
-                    apart.attachment.size = (long) apart.part.getSize();
-                    apart.attachment.cid = cid;
-                    apart.attachment.related = related;
-                    apart.attachment.encryption = apart.encrypt;
+                if ("text/calendar".equalsIgnoreCase(apart.attachment.type) &&
+                        TextUtils.isEmpty(apart.attachment.name))
+                    apart.attachment.name = "invite.ics";
 
-                    if ("text/calendar".equalsIgnoreCase(apart.attachment.type) &&
-                            TextUtils.isEmpty(apart.attachment.name))
-                        apart.attachment.name = "invite.ics";
+                if (apart.attachment.size <= 0)
+                    apart.attachment.size = null;
 
-                    if (apart.attachment.size <= 0)
-                        apart.attachment.size = null;
-
-                    // https://tools.ietf.org/html/rfc2392
-                    if (apart.attachment.cid != null) {
-                        if (!apart.attachment.cid.startsWith("<"))
-                            apart.attachment.cid = "<" + apart.attachment.cid;
-                        if (!apart.attachment.cid.endsWith(">"))
-                            apart.attachment.cid += ">";
-                    }
-
-                    parts.attachments.add(apart);
+                // https://tools.ietf.org/html/rfc2392
+                if (apart.attachment.cid != null) {
+                    if (!apart.attachment.cid.startsWith("<"))
+                        apart.attachment.cid = "<" + apart.attachment.cid;
+                    if (!apart.attachment.cid.endsWith(">"))
+                        apart.attachment.cid += ">";
                 }
+
+                parts.attachments.add(apart);
             }
         } catch (FolderClosedException ex) {
             throw ex;
@@ -3929,6 +4447,35 @@ public class MessageHelper {
             else
                 Log.w(ex);
             parts.warnings.add(Log.formatThrowable(ex, false));
+        }
+    }
+
+    private Object tryParseMultipart(String text, String contentType) {
+        try {
+            return new MimeMultipart(new DataSource() {
+                @Override
+                public InputStream getInputStream() throws IOException {
+                    return new ByteArrayInputStream(text.getBytes(StandardCharsets.ISO_8859_1));
+                }
+
+                @Override
+                public OutputStream getOutputStream() throws IOException {
+                    return null;
+                }
+
+                @Override
+                public String getContentType() {
+                    return contentType;
+                }
+
+                @Override
+                public String getName() {
+                    return "String";
+                }
+            });
+        } catch (MessagingException ex) {
+            Log.e(ex);
+            return text;
         }
     }
 
@@ -3990,23 +4537,18 @@ public class MessageHelper {
                         });
 
                     Log.w("Fetching raw message");
-                    File file = File.createTempFile("serverbug", null, cacheDir);
-                    try (OutputStream os = new BufferedOutputStream(new FileOutputStream(file))) {
-                        imessage.writeTo(os);
-                    }
+                    Helper.ByteArrayInOutStream bos = new Helper.ByteArrayInOutStream();
+                    imessage.writeTo(bos);
 
-                    if (file.length() == 0)
+                    ByteArrayInputStream bis = bos.getInputStream();
+                    if (bis.available() == 0)
                         throw new IOException("NIL");
 
-                    Properties props = MessageHelper.getSessionProperties();
+                    Properties props = MessageHelper.getSessionProperties(true);
                     Session isession = Session.getInstance(props, null);
 
                     Log.w("Decoding raw message");
-                    try (InputStream is = new BufferedInputStream(new FileInputStream(file))) {
-                        imessage = new MimeMessageEx(isession, is, imessage);
-                    }
-
-                    file.delete();
+                    imessage = new MimeMessageEx(isession, bis, imessage);
                 } catch (IOException ex1) {
                     Log.e(ex1);
                     throw ex;
@@ -4054,6 +4596,8 @@ public class MessageHelper {
             // flag-keyword    = atom
             // atom            = 1*ATOM-CHAR
             // ATOM-CHAR       = <any CHAR except atom-specials>
+            // CHAR8           = %x01-ff ; any OCTET except NUL, %x00
+            // So, basically ISO 8859-1
             char kar = keyword.charAt(i);
             // atom-specials   = "(" / ")" / "{" / SP / CTL / list-wildcards / quoted-specials / resp-specials
             if (kar == '(' || kar == ')' || kar == '{' || kar == ' ' || Character.isISOControl(kar))
@@ -4094,13 +4638,18 @@ public class MessageHelper {
             return null;
 
         int skip = 0;
+        boolean quoted = false;
         StringBuilder sb = new StringBuilder();
         int len = text.length();
         for (int i = 0; i < len; i++) {
             char kar = text.charAt(i);
-            if (kar == '(' && text.indexOf(')', i) > 0)
+
+            if (kar == '"' && (quoted || text.indexOf('"', i + 1) > 0))
+                quoted = !quoted;
+
+            if (!quoted && kar == '(' && text.indexOf(')', i) > 0)
                 skip++;
-            else if (kar == ')' && skip > 0)
+            else if (!quoted && kar == ')' && skip > 0)
                 skip--;
             else if (skip == 0)
                 sb.append(kar);
@@ -4125,7 +4674,7 @@ public class MessageHelper {
             return null;
 
         List<String> emails = new ArrayList<>();
-        List<Address> result = new ArrayList<>();
+        List<InternetAddress> result = new ArrayList<>();
         for (InternetAddress address : addresses) {
             String email = address.getAddress();
             if (!emails.contains(email)) {
@@ -4197,7 +4746,7 @@ public class MessageHelper {
         return true;
     }
 
-    static String[] equalDomain(Context context, Address[] a1, Address[] a2) {
+    static String[] equalRootDomain(Context context, Address[] a1, Address[] a2) {
         if (a1 == null || a1.length == 0)
             return null;
         if (a2 == null || a2.length == 0)
@@ -4207,13 +4756,17 @@ public class MessageHelper {
             String r = UriHelper.getEmailDomain(((InternetAddress) _a1).getAddress());
             if (r == null)
                 continue;
-            String d1 = UriHelper.getParentDomain(context, r);
+            String d1 = UriHelper.getRootDomain(context, r);
+            if (d1 == null)
+                continue;
 
             for (Address _a2 : a2) {
                 String f = UriHelper.getEmailDomain(((InternetAddress) _a2).getAddress());
                 if (f == null)
                     continue;
-                String d2 = UriHelper.getParentDomain(context, f);
+                String d2 = UriHelper.getRootDomain(context, f);
+                if (d2 == null)
+                    continue;
 
                 if (!d1.equalsIgnoreCase(d2))
                     return new String[]{d2, d1};
@@ -4262,22 +4815,6 @@ public class MessageHelper {
         return values;
     }
 
-    static class MessagingStructureException extends MessagingException {
-        private String className;
-
-        MessagingStructureException(Object content) {
-            super();
-            if (content != null)
-                this.className = content.getClass().getName();
-        }
-
-        @Nullable
-        @Override
-        public String getMessage() {
-            return className;
-        }
-    }
-
     static class Report {
         String type;
         String reporter;
@@ -4286,6 +4823,8 @@ public class MessageHelper {
         String status;
         String diagnostic;
         String disposition;
+        String refid;
+        String feedback;
         String html;
 
         Report(String type, String content) {
@@ -4295,7 +4834,7 @@ public class MessageHelper {
             content = content.replaceAll("(\\r?\\n)+", "\n");
             ByteArrayInputStream bis = new ByteArrayInputStream(content.getBytes());
             try {
-                Enumeration<Header> headers = new InternetHeaders(bis).getAllHeaders();
+                Enumeration<Header> headers = new InternetHeaders(bis, true).getAllHeaders();
                 while (headers.hasMoreElements()) {
                     Header header = headers.nextElement();
                     String name = header.getName();
@@ -4322,6 +4861,7 @@ public class MessageHelper {
                                 this.recipient = value;
                                 break;
                             case "Status":
+                                // https://www.iana.org/assignments/smtp-enhanced-status-codes/smtp-enhanced-status-codes.xhtml
                                 this.status = value;
                                 break;
                             case "Diagnostic-Code":
@@ -4329,7 +4869,7 @@ public class MessageHelper {
                                 break;
                         }
                     } else if (isDispositionNotification(type)) {
-                        //https://datatracker.ietf.org/doc/html/rfc3798#section-3.2.6
+                        // https://datatracker.ietf.org/doc/html/rfc3798#section-3.2.6
                         switch (name) {
                             case "Reporting-UA":
                                 this.reporter = value;
@@ -4339,6 +4879,18 @@ public class MessageHelper {
                                 break;
                             case "Disposition":
                                 this.disposition = value;
+                                break;
+                            case "Original-Message-ID":
+                                this.refid = value;
+                                break;
+                        }
+                    } else if (isFeedbackReport(type)) {
+                        // https://datatracker.ietf.org/doc/html/rfc5965
+                        feedback = "complaint";
+                        switch (name) {
+                            case "Feedback-Type":
+                                // abuse, fraud, other, virus
+                                feedback = value;
                                 break;
                         }
                     }
@@ -4359,8 +4911,16 @@ public class MessageHelper {
             return isDispositionNotification(type);
         }
 
+        boolean isFeedbackReport() {
+            return isFeedbackReport(type);
+        }
+
         boolean isDelivered() {
             return ("delivered".equals(action) || "relayed".equals(action) || "expanded".equals(action));
+        }
+
+        boolean isDelayed() {
+            return "delayed".equals(action);
         }
 
         boolean isMdnManual() {
@@ -4413,6 +4973,10 @@ public class MessageHelper {
 
         static boolean isDispositionNotification(String type) {
             return "message/disposition-notification".equalsIgnoreCase(type);
+        }
+
+        static boolean isFeedbackReport(String type) {
+            return "message/feedback-report".equalsIgnoreCase(type);
         }
     }
 }

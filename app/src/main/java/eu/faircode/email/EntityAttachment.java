@@ -100,6 +100,39 @@ public class EntityAttachment {
         return ImageHelper.isImage(getMimeType());
     }
 
+    boolean isCompressed() {
+        if ("application/zip".equals(type))
+            return true;
+        if ("application/gzip".equals(type) && !BuildConfig.PLAY_STORE_RELEASE)
+            return true;
+
+        String extension = Helper.getExtension(name);
+        if ("zip".equals(extension))
+            return true;
+        if ("gz".equals(extension) && !BuildConfig.PLAY_STORE_RELEASE)
+            return true;
+
+        return false;
+    }
+
+    boolean isGzip() {
+        if (BuildConfig.PLAY_STORE_RELEASE)
+            return false;
+
+        if ("application/gzip".equals(type))
+            return true;
+
+        String extension = Helper.getExtension(name);
+        if ("gz".equals(extension))
+            return true;
+
+        return false;
+    }
+
+    boolean isTarGzip() {
+        return (name != null && name.endsWith(".tar.gz"));
+    }
+
     boolean isEncryption() {
         if ("application/pkcs7-mime".equals(type))
             return true;
@@ -169,6 +202,17 @@ public class EntityAttachment {
         if (encryption != null)
             return type;
 
+        if ("audio/mid".equals(type))
+            return "audio/midi";
+
+        // https://www.rfc-editor.org/rfc/rfc3555.txt
+        if ("image/jpg".equals(type) || "video/jpeg".equals(type))
+            return "image/jpeg";
+
+        if (!TextUtils.isEmpty(type) &&
+                (type.endsWith("/pdf") || type.endsWith("/x-pdf")))
+            return "application/pdf";
+
         String extension = Helper.getExtension(name);
         if (extension == null)
             return type;
@@ -211,6 +255,9 @@ public class EntityAttachment {
         if ("ppt".equals(extension))
             return "application/vnd.ms-powerpoint";
 
+        if ("application/vnd.ms-pps".equals(type))
+            return "application/vnd.ms-powerpoint";
+
         if ("pptx".equals(extension))
             return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
@@ -225,6 +272,35 @@ public class EntityAttachment {
         if ("odp".equals(extension))
             return "application/vnd.oasis.opendocument.presentation";
 
+        // Images
+
+        if ("avif".equals(extension))
+            return "image/avif";
+
+        if ("bmp".equals(extension))
+            return "image/bmp";
+
+        if ("heic".equals(extension))
+            return "image/heic";
+
+        if ("heif".equals(extension))
+            return "image/heif";
+
+        if ("gif".equals(extension))
+            return "image/gif";
+
+        if ("jpg".equals(extension) || "jpeg".equals(extension))
+            return "image/jpeg";
+
+        if ("png".equals(extension))
+            return "image/png";
+
+        if ("svg".equals(extension))
+            return "image/svg+xml";
+
+        if ("webp".equals(extension))
+            return "image/webp";
+
         // Other
 
         if ("zip".equals(extension) ||
@@ -237,17 +313,6 @@ public class EntityAttachment {
 
         if ("text/plain".equals(type) && "ovpn".equals(extension))
             return "application/x-openvpn-profile";
-
-        if ("audio/mid".equals(type))
-            return "audio/midi";
-
-        // https://www.rfc-editor.org/rfc/rfc3555.txt
-        if ("image/jpg".equals(type) || "video/jpeg".equals(type))
-            return "image/jpeg";
-
-        if (!TextUtils.isEmpty(type) &&
-                (type.endsWith("/pdf") || type.endsWith("/x-pdf")))
-            return "application/pdf";
 
         // Guess types
         if (gtype != null) {

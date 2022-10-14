@@ -5,7 +5,6 @@
     <string name="app_welcome">FairEmail er en e-postleser med åpen kildekode fokusert på personvern og sikkerhet. Derfor kan noen funksjoner virke annerledes enn det du er vant til.</string>
     <string name="app_exit">Gå \'tilbake\' igjen for å avslutte</string>
     <string name="app_cake">Ikke nok lagringsplass igjen</string>
-    <string name="channel_service">Motta</string>
     <string name="channel_send">Send</string>
     <string name="channel_notification">E-post</string>
     <string name="channel_update">Oppdateringer</string>
@@ -105,7 +104,6 @@
     <string name="title_setup_help">Hjelp</string>
     <string name="title_setup_quick">Hurtig oppsett</string>
     <string name="title_setup_quick_support">Noen leverandører gjør det vanskelig å legge til en konto. Vennligst ikke klandre FairEmail for dette, men be om support i stedet.</string>
-    <string name="title_setup_quick_hint">Hurtig oppsettet henter konfigurasjons informasjon fra autoconfig.thunderbird.net</string>
     <string name="title_setup_quick_imap">IMAP-tjener for mottak av meldinger</string>
     <string name="title_setup_quick_smtp">SMTP-tjener for sending av meldinger</string>
     <string name="title_setup_wizard">Veiviser</string>
@@ -116,11 +114,8 @@
     <string name="title_setup_pop3">POP3-konto</string>
     <string name="title_setup_gmail_rationale">Gi tillatelser til å velge en konto og lese navnet ditt</string>
     <string name="title_setup_gmail_permissions">Google vil be om tillatelser til å lese, komponere, sende og slette all e-postmeldingen din permanent. FairEmail vil aldri slette meldingene dine uten ditt eksplisitte samtykke.</string>
-    <string name="title_setup_gmail_drafts">Hvis utkast mappen ikke er tilgjengelig med IMAP, kan du fikse dette i Gmail-etikettinnstillingene</string>
-    <string name="title_setup_gmail_password">Jeg ønsker å godkjenne en konto med et passord</string>
     <string name="title_setup_office_auth">Feilen \'AUTHENTICATE failed\' kan skyldes at IMAP/SMTP er deaktivert av systemadministratoren</string>
     <string name="title_setup_oauth_rationale">Autoriser tilgang til din %1$s konto</string>
-    <string name="title_setup_oauth_update">Autoriser eksisterende konto på nytt</string>
     <string name="title_setup_oauth_updated">Konto autorisasjon ble oppdatert</string>
     <string name="title_setup_oauth_authorize">Godkjenne</string>
     <string name="title_setup_select_account">Velg konto</string>
@@ -332,10 +327,7 @@
     <string name="title_advanced_reset_importance">Tilbakestill viktigheten for å flytte meldinger</string>
     <string name="title_advanced_notifications">Administrer varsler</string>
     <string name="title_advanced_notifications_default">Standard kanal</string>
-    <string name="title_advanced_notifications_service">Motta kanal</string>
     <string name="title_advanced_notifications_newest_first">Vis de nyeste varslene først</string>
-    <string name="title_advanced_notifications_background">Bruk bakgrunnstjeneste for å synkronisere meldinger</string>
-    <string name="title_advanced_notifications_background_hint">En bakgrunnstjeneste kan stanses av Android når som helst, men krever ikke en statuslinje varsel</string>
     <string name="title_advanced_badge">Vis antall nye meldinger på appikonet</string>
     <string name="title_advanced_unseen_ignored">La antallet nye meldinger samsvare med antall varsler</string>
     <string name="title_advanced_notify_background">Vis varsler kun i bakgrunnen</string>
@@ -363,8 +355,9 @@
     <string name="title_advanced_biometrics_notify">Vis varselinnhold når du bruker biometrisk godkjenning</string>
     <string name="title_advanced_light">Bruk meldingslys</string>
     <string name="title_advanced_sound">Velg varslingslyd</string>
+    <string name="title_advanced_notifications_background">Bruk bakgrunnstjeneste for å synkronisere meldinger</string>
+    <string name="title_advanced_notifications_background_hint">En bakgrunnstjeneste kan stanses av Android når som helst, men krever ikke en statuslinje varsel</string>
     <string name="title_advanced_confirm_links">Bekreft åpningen av lenker</string>
-    <string name="title_advanced_browse_links">Deleger lenker til Android</string>
     <string name="title_advanced_ask_images">Bekreft visningen av bilder</string>
     <string name="title_advanced_confirm_html">Vis standardformaterte meldinger</string>
     <string name="title_advanced_tracking">Forsøk på å gjenkjenne og deaktivere sporingsbilder</string>
@@ -426,7 +419,6 @@
     <string name="title_advanced_metered_hint">Målte tilkoblinger er vanligvis mobile tilkoblinger eller betalte Wi-Fi-hotspots</string>
     <string name="title_advanced_metered_warning">Deaktivering av dette alternativet deaktiverer mottak og sending av meldinger på mobile internettforbindelser</string>
     <string name="title_advanced_rlah_hint">Forutsatt ingen roaming i EU</string>
-    <string name="title_advanced_tcp_keep_alive_hint">Aktivering av dette kan forårsake tilkoblingsproblemer på noen enheter</string>
     <string name="title_advanced_timeout_hint">Tidsavbrudd for lese/skriving blir satt til den doble av tilkoblings avbruddstiden. Høyere verdier vil føre til mer batteribruk.</string>
     <string name="title_advanced_ssl_harden_hint">Aktivering av dette vil deaktivere svake SSL-protokoller og chiffer, noe som kan føre til tilkoblingsproblemer</string>
     <string name="title_advanced_roaming_hint">Meldingsoverskrifter vil alltid bli hentet når du roamer. Du kan bruke enhetens roaming-innstilling for å deaktivere Internett mens du roamer.</string>
@@ -437,7 +429,7 @@
     <string name="title_advanced_navbar_colorize_hint">Om dette fungerer avhenger av Android-versjonen og varianten</string>
     <string name="title_advanced_threading_hint">Gruppemeldinger knyttet til hverandre</string>
     <string name="title_advanced_highlight_hint">Farge på temaet vil bli brukt for å framheve</string>
-    <string name="title_advanced_gravatars_hint">Det kan være en personvernrisiko</string>
+    <string name="title_advanced_privacy_risk">Det kan være en personvernrisiko</string>
     <string name="title_advanced_preview_hint">Kun tilgjengelig når meldingstekst ble lastet ned</string>
     <string name="title_advanced_preview_issue">Rullingen kan gå tregt på grunn av en feil i noen Android-versjoner når antall linjer er mer enn én</string>
     <string name="title_advanced_overview_mode_hint">Dette kan resultere i veldig liten skrift</string>
@@ -507,7 +499,6 @@
     <string name="title_custom">Tilpasset</string>
     <string name="title_host">Vertsnavn</string>
     <string name="title_encryption">Kryptering</string>
-    <string name="title_encryption_none">Ingen</string>
     <string name="title_allow_insecure">Tillat usikre forbindelser</string>
     <string name="title_insecure_remark">Usikre tilkoblinger bør bare være tillatt i pålitelige nettverk og aldri i offentlige nettverk</string>
     <string name="title_port">Portnummer</string>
@@ -559,7 +550,6 @@
     <string name="title_last_connected">Sist tilkoblet: %1$s</string>
     <string name="title_backoff_until">Ventetid etter feilmelding: %1$s</string>
     <string name="title_storage_quota">Bruk av tjenerlagring: %1$s/%2$s</string>
-    <string name="title_pop_support">POP3-protokollen støtter bare nedlasting og sletting av meldinger fra innboksen. POP3 kan ikke merke meldinger som er lest, flytte meldinger, etc. POP3 vil bruke mer batteristrøm og data enn IMAP. Så vurder å bruke IMAP-protokollen når det er mulig.</string>
     <string name="title_oauth_support">OAuth støttes ikke</string>
     <string name="title_review">Anmeldelse</string>
     <string name="title_hint_alias">Trykk lenge for å velge alternativer, for eksempel kopiere for å opprette aliasidentiteter</string>
@@ -585,6 +575,8 @@
     <string name="title_delete_channel">Slett varselkanal</string>
     <string name="title_insert_contact">Legg til kontakt</string>
     <string name="title_edit_contact">Rediger kontakt</string>
+    <string name="title_contact_email">E-post</string>
+    <string name="title_contact_name">Navn</string>
     <string name="title_create_sub_folder">Lag undermappe</string>
     <string name="title_empty_trash_ask">Slette alle forkastede meldinger permanent?</string>
     <string name="title_empty_spam_ask">Slette alle spammeldinger permanent?</string>
@@ -598,7 +590,6 @@
     <string name="title_delete_operation_flag">Flagg operasjoner</string>
     <string name="title_delete_operation_delete">Slett operasjoner</string>
     <string name="title_delete_operation_deleted">%1$d operasjoner er slettet</string>
-    <string name="title_delete_contacts">Slette alle lokale kontakter?</string>
     <string name="title_no_operations">Ingen ventende operasjoner</string>
     <string name="title_hint_operations">Slette operasjoner kan føre til at meldinger og synkroniseringsproblemer forsvinner</string>
     <string name="title_folder_name">Mappenavn</string>
@@ -686,6 +677,7 @@
     <string name="title_download_all">Last ned alt</string>
     <string name="title_save_all">Lagre alt</string>
     <string name="title_save_eml">Lagre rå meldingsfil</string>
+    <string name="title_quick_actions_snooze">Utsett</string>
     <string name="title_trash">Søppel</string>
     <string name="title_copy">Kopiere &#8230;</string>
     <string name="title_copy_to">Kopier til &#8230;</string>
@@ -713,7 +705,6 @@
     <string name="title_reply_receipt">Send lesekvittering</string>
     <string name="title_reply_template">Svar med mal</string>
     <string name="title_move_undo">Flytter til %1$s (%2$d)</string>
-    <string name="title_open_with">Åpne med</string>
     <string name="title_authentication_failed">%1$s godkjenning mislyktes</string>
     <string name="title_receipt_subject">Lesebekreftelse: %1$s</string>
     <string name="title_receipt_text">Denne lesekvitteringen bekrefter bare at meldingen ble vist. Det er ingen garanti for at mottakeren har lest meldings innholdet.</string>
@@ -721,7 +712,6 @@
     <string name="title_no_recorder">Ingen passende lydopptaker app tilgjengelig</string>
     <string name="title_no_camera">Ingen passende kamera app tilgjengelig</string>
     <string name="title_no_saf">Storage access framework ikke tilgjengelig</string>
-    <string name="title_no_stream">En utdatert app sendte en filbane i stedet for en filstrøm</string>
     <string name="title_no_internet">Ingen eller ingen egnet internettforbindelse</string>
     <string name="title_no_connection">Koble til en eller flere kontoer &#8230;</string>
     <string name="title_no_folder">Mappe eksisterer ikke</string>
@@ -913,6 +903,10 @@
     <string name="title_search_device">Søk på enheten</string>
     <string name="title_search_server">Søk på tjener</string>
     <string name="title_search_in">Søk i</string>
+    <string name="title_search_sender">Søk etter avsender</string>
+    <string name="title_save_search_name">Navn</string>
+    <string name="title_save_search_order">Rekkefølge</string>
+    <string name="title_save_search_color">Farge</string>
     <string name="title_sort_on">Sorter på</string>
     <string name="title_sort_on_time">Tid</string>
     <string name="title_sort_on_unread">Ulest</string>
@@ -945,6 +939,7 @@
     <string name="title_edit_signature">Rediger signatur</string>
     <string name="title_edit_signature_text">Signaturtekst</string>
     <string name="title_edit_signature_image">Sett inn bilde</string>
+    <string name="title_answer_define_name">Navn</string>
     <string name="title_answer_caption">Rediger mal</string>
     <string name="title_answer_reply">Svarmal</string>
     <string name="title_answer_name">Navn på mal</string>
@@ -1212,7 +1207,6 @@
     <string name="title_boundary_retry">Prøv igjen</string>
     <string name="title_unexpected_error">Uventet feil</string>
     <string name="title_log">Logg</string>
-    <string name="title_auto_scroll">Automatisk rulling</string>
     <string name="title_log_clear">Tøm</string>
     <string name="title_rules_search_hint">Søkenavn eller betingelse</string>
     <string name="title_rules_export">Eksporter regler</string>
@@ -1274,6 +1268,7 @@
     <string-array name="pollIntervalNames">
         <item>Alltid</item>
         <item>Hvert 5. minutt</item>
+        <item>Hvert 10. minutt</item>
         <item>Hvert 15. minutt</item>
         <item>Hvert 30. minutt</item>
         <item>Hver time</item>
@@ -1317,6 +1312,7 @@
         <item>Gå til neste samtale</item>
     </string-array>
     <string-array name="resizeNames">
+        <item>Tiny</item>
         <item>Extra small</item>
         <item>Liten</item>
         <item>Medium</item>
@@ -1419,5 +1415,18 @@
         <item>Medium</item>
         <item>Stor</item>
         <item>Ekstra stor</item>
+    </string-array>
+    <string-array name="contactTypes">
+        <item>Mottaker</item>
+        <item>Avsender</item>
+        <item>Blokkert</item>
+        <item>Not blocked</item>
+    </string-array>
+    <string-array name="contactGroupTypes">
+        <item>Noen</item>
+        <item>Home</item>
+        <item>Arbeid</item>
+        <item>Andre</item>
+        <item>Mobile</item>
     </string-array>
 </resources>

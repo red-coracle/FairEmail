@@ -169,6 +169,20 @@ public class EntityOperation {
                 message.keywords = keywords.toArray(new String[0]);
                 db.message().setMessageKeywords(message.id, DB.Converters.fromStringArray(message.keywords));
 
+                if (set) {
+                    EntityFolder folder = db.folder().getFolder(message.folder);
+                    if (folder != null) {
+                        List<String> fkeywords = new ArrayList<>();
+                        if (folder.keywords != null)
+                            fkeywords.addAll(Arrays.asList(folder.keywords));
+                        if (!fkeywords.contains(keyword))
+                            fkeywords.add(keyword);
+                        Collections.sort(fkeywords);
+                        db.folder().setFolderKeywords(folder.id,
+                                DB.Converters.fromStringArray(fkeywords.toArray(new String[0])));
+                    }
+                }
+
             } else if (LABEL.equals(name)) {
                 String label = jargs.getString(0);
                 boolean set = jargs.getBoolean(1);
@@ -181,12 +195,14 @@ public class EntityOperation {
                 // 0: target folder
                 // 1: mark seen
                 // 2: auto classified
+                // 3: no block sender
 
                 // Parameters out:
                 // 0: target folder
                 // 1: mark seen
                 // 2: temporary message
                 // 3: remove flag
+                // 4: permanently delete
 
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
                 boolean autoread = prefs.getBoolean("autoread", false);
@@ -210,6 +226,16 @@ public class EntityOperation {
                 if (source == null || target == null || source.id.equals(target.id))
                     return;
 
+                if (EntityFolder.JUNK.equals(target.type) &&
+                        Objects.equals(source.account, target.account) &&
+                        (jargs.opt(3) == null || !jargs.optBoolean(3))) {
+                    jargs.remove(3);
+                    EntityLog.log(context, "Auto block sender=" + MessageHelper.formatAddresses(message.from));
+                    EntityContact.update(context,
+                            message.account, message.identity, message.from,
+                            EntityContact.TYPE_JUNK, message.received);
+                }
+
                 if (EntityFolder.DRAFTS.equals(source.type) &&
                         EntityFolder.TRASH.equals(target.type))
                     autoread = true;
@@ -232,9 +258,9 @@ public class EntityOperation {
                 if (autoread || autounflag || reset_importance)
                     for (EntityMessage similar : db.message().getMessagesBySimilarity(message.account, message.id, message.msgid)) {
                         if (autoread)
-                            db.message().setMessageUiSeen(similar.id, true);
+                            queue(context, similar, SEEN, true);
                         if (autounflag)
-                            db.message().setMessageUiFlagged(similar.id, false, null);
+                            queue(context, similar, FLAG, false);
                         if (reset_importance) {
                             db.message().setMessageImportance(similar.id, null);
                             queue(context, similar, KEYWORD, MessageHelper.FLAG_LOW_IMPORTANCE, false);
@@ -245,6 +271,7 @@ public class EntityOperation {
                 if (message.ui_found)
                     db.message().setMessageFound(message.id, false);
 
+                boolean premove = true;
                 if (source.account.equals(target.account)) {
                     EntityAccount account = db.account().getAccount(message.account);
                     if ((account != null && !account.isGmail()) ||
@@ -257,6 +284,10 @@ public class EntityOperation {
                             EntityFolder.ARCHIVE.equals(source.type) &&
                             !(EntityFolder.TRASH.equals(target.type) || EntityFolder.JUNK.equals(target.type)))
                         name = COPY;
+
+                    if (account != null && account.isGmail() &&
+                            (EntityFolder.DRAFTS.equals(source.type) || EntityFolder.DRAFTS.equals(target.type)))
+                        premove = false;
                 }
 
                 if (message.ui_snoozed != null &&
@@ -273,8 +304,10 @@ public class EntityOperation {
                         if (rule.isBlockingSender(message, source))
                             db.rule().deleteRule(rule.id);
 
-                    EntityContact.delete(context, message.account, message.from, EntityContact.TYPE_JUNK);
-                    EntityContact.update(context, message.account, message.from, EntityContact.TYPE_NO_JUNK, message.received);
+                    EntityContact.delete(context, message.account, message.from,
+                            EntityContact.TYPE_JUNK);
+                    EntityContact.update(context, message.account, message.identity, message.from,
+                            EntityContact.TYPE_NO_JUNK, message.received);
                 }
 
                 if (EntityFolder.JUNK.equals(target.type))
@@ -282,7 +315,8 @@ public class EntityOperation {
 
                 // Create copy without uid in target folder
                 // Message with same msgid can be in archive
-                if (message.uid != null &&
+                if (premove &&
+                        message.uid != null &&
                         !TextUtils.isEmpty(message.msgid) &&
                         db.message().countMessageByMsgId(target.id, message.msgid) == 0) {
                     File msource = message.getFile(context);
@@ -418,6 +452,19 @@ public class EntityOperation {
                         account.protocol != EntityAccount.TYPE_IMAP) {
                     message.ui_hide = true;
                     db.message().setMessageUiHide(message.id, message.ui_hide);
+
+                    if (perform_expunge && account != null && account.isGmail()) {
+                        EntityFolder source = db.folder().getFolder(message.folder);
+                        if (source != null && EntityFolder.ARCHIVE.equals(source.type)) {
+                            EntityFolder trash = db.folder().getFolderByType(message.account, EntityFolder.TRASH);
+                            if (trash != null && !trash.id.equals(message.folder)) {
+                                jargs.put(0, trash.id); // target
+                                jargs.put(4, true); // delete
+                                queue(context, message.account, message.folder, message.id, EntityOperation.MOVE, jargs);
+                                return;
+                            }
+                        }
+                    }
                 } else {
                     message.ui_deleted = !message.ui_deleted;
                     db.message().setMessageUiDeleted(message.id, message.ui_deleted);
@@ -460,7 +507,7 @@ public class EntityOperation {
             int count = db.operation().getOperationCount(folder, name);
             if (count >= MAX_FETCH) {
                 Log.i("Replacing fetch by sync folder=" + folder + " args=" + jargs + " count=" + count);
-                sync(context, folder, false, true);
+                sync(context, folder, false, false);
                 return;
             }
         }
@@ -484,7 +531,6 @@ public class EntityOperation {
         crumb.put("folder", op.account + ":" + op.folder);
         if (op.message != null)
             crumb.put("message", Long.toString(op.message));
-        crumb.put("free", Integer.toString(Log.getFreeMemMb()));
         Log.breadcrumb("queued", crumb);
     }
 
@@ -601,7 +647,8 @@ public class EntityOperation {
         EntityLog.log(context, "Cleanup op=" + id + "/" + name + " folder=" + folder + " message=" + message);
 
         if (message != null) {
-            db.message().setMessageUiHide(message, false);
+            if (MOVE.equals(name) || DELETE.equals(name))
+                db.message().setMessageUiHide(message, false);
 
             if (SEEN.equals(name)) {
                 EntityMessage m = db.message().getMessage(message);
@@ -614,6 +661,12 @@ public class EntityOperation {
                 if (m != null)
                     db.message().setMessageUiFlagged(m.id, m.flagged, m.color);
             }
+        }
+
+        if (MOVE.equals(name)) {
+            int count = db.operation().deleteOperation(folder, PURGE);
+            if (count > 0)
+                sync(context, folder, false);
         }
 
         if (MOVE.equals(name) ||

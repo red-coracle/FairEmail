@@ -40,6 +40,8 @@ import android.webkit.CookieManager;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.os.LocaleListCompat;
 import androidx.emoji2.text.DefaultEmojiCompatConfig;
 import androidx.emoji2.text.EmojiCompat;
 import androidx.emoji2.text.FontRequestEmojiCompatConfig;
@@ -62,6 +64,9 @@ public class ApplicationEx extends Application
     }
 
     static Context getLocalizedContext(Context context) {
+        if (BuildConfig.DEBUG && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && false)
+            AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList());
+
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
 
         if (prefs.contains("english")) {
@@ -113,6 +118,11 @@ public class ApplicationEx extends Application
                 " process=" + android.os.Process.myPid());
         Log.logMemory(this, "App");
 
+        if (BuildConfig.DEBUG)
+            UriHelper.test(this);
+
+        CoalMine.install(this);
+
         registerActivityLifecycleCallbacks(lifecycleCallbacks);
 
         getMainLooper().setMessageLogging(new Printer() {
@@ -140,12 +150,15 @@ public class ApplicationEx extends Application
                             StackTraceElement[] stack = v.getStackTrace();
                             for (StackTraceElement ste : stack) {
                                 String clazz = ste.getClassName();
+                                if (clazz == null)
+                                    continue;
+                                if (clazz.startsWith("leakcanary."))
+                                    return;
                                 if ("com.sun.mail.util.WriteTimeoutSocket".equals(clazz))
                                     return;
-                                if (clazz != null &&
-                                        (clazz.startsWith("org.chromium") ||
-                                                clazz.startsWith("com.android.webview.chromium") ||
-                                                clazz.startsWith("androidx.appcompat.widget")))
+                                if (clazz.startsWith("org.chromium") ||
+                                        clazz.startsWith("com.android.webview.chromium") ||
+                                        clazz.startsWith("androidx.appcompat.widget"))
                                     return;
                             }
 
@@ -158,6 +171,7 @@ public class ApplicationEx extends Application
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         final boolean crash_reports = prefs.getBoolean("crash_reports", false);
+        final boolean leak_canary = prefs.getBoolean("leak_canary", false);
         final boolean load_emoji = prefs.getBoolean("load_emoji", BuildConfig.PLAY_STORE_RELEASE);
 
         prev = Thread.getDefaultUncaughtExceptionHandler();
@@ -182,6 +196,7 @@ public class ApplicationEx extends Application
         });
 
         Log.setup(this);
+        CoalMine.setup(leak_canary);
 
         upgrade(this);
 
@@ -214,6 +229,7 @@ public class ApplicationEx extends Application
                 Log.e(ex);
             }
 
+        EmailProvider.init(this);
         EncryptionHelper.init(this);
         MessageHelper.setSystemProperties(this);
 
@@ -225,8 +241,6 @@ public class ApplicationEx extends Application
             ServiceSynchronize.watchdog(this);
             ServiceSend.watchdog(this);
         }
-
-        ServiceSynchronize.scheduleWatchdog(this);
 
         boolean work_manager = prefs.getBoolean("work_manager", true);
         Log.i("Work manager=" + work_manager);
@@ -250,49 +264,54 @@ public class ApplicationEx extends Application
 
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        switch (key) {
-            case "enabled":
-                ServiceSynchronize.reschedule(this);
-                WorkerCleanup.init(this);
-                ServiceSynchronize.scheduleWatchdog(this);
-                WidgetSync.update(this);
-                break;
-            case "poll_interval":
-            case "schedule":
-            case "schedule_start":
-            case "schedule_end":
-            case "schedule_day0":
-            case "schedule_day1":
-            case "schedule_day2":
-            case "schedule_day3":
-            case "schedule_day4":
-            case "schedule_day5":
-            case "schedule_day6":
-                ServiceSynchronize.reschedule(this);
-                break;
-            case "check_blocklist":
-            case "use_blocklist":
-                DnsBlockList.clearCache();
-                break;
-            case "watchdog":
-                ServiceSynchronize.scheduleWatchdog(this);
-                break;
-            case "secure": // privacy
-            case "load_emoji": // privacy
-            case "shortcuts": // misc
-            case "language": // misc
-            case "wal": // misc
-                // Should be excluded for import
-                restart(this);
-                break;
-            case "debug":
-            case "log_level":
-                Log.setLevel(this);
-                break;
+        try {
+            switch (key) {
+                case "enabled":
+                    ServiceSynchronize.reschedule(this);
+                    WorkerCleanup.init(this);
+                    ServiceSynchronize.scheduleWatchdog(this);
+                    WidgetSync.update(this);
+                    break;
+                case "poll_interval":
+                case "schedule":
+                case "schedule_start":
+                case "schedule_end":
+                case "schedule_day0":
+                case "schedule_day1":
+                case "schedule_day2":
+                case "schedule_day3":
+                case "schedule_day4":
+                case "schedule_day5":
+                case "schedule_day6":
+                    ServiceSynchronize.reschedule(this);
+                    break;
+                case "check_blocklist":
+                case "use_blocklist":
+                    DnsBlockList.clearCache();
+                    break;
+                case "watchdog":
+                    ServiceSynchronize.scheduleWatchdog(this);
+                    break;
+                case "secure": // privacy
+                case "load_emoji": // privacy
+                case "shortcuts": // misc
+                case "language": // misc
+                case "wal": // misc
+                    // Should be excluded for import
+                    restart(this, key);
+                    break;
+                case "debug":
+                case "log_level":
+                    Log.setLevel(this);
+                    break;
+            }
+        } catch (Throwable ex) {
+            Log.e(ex);
         }
     }
 
-    static void restart(Context context) {
+    static void restart(Context context, String reason) {
+        Log.i("Restart because " + reason);
         Intent intent = new Intent(context, ActivityMain.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         context.startActivity(intent);
@@ -304,7 +323,6 @@ public class ApplicationEx extends Application
         Log.logMemory(this, "Trim memory level=" + level);
         Map<String, String> crumb = new HashMap<>();
         crumb.put("level", Integer.toString(level));
-        crumb.put("free", Integer.toString(Log.getFreeMemMb()));
         Log.breadcrumb("trim", crumb);
         super.onTrimMemory(level);
     }
@@ -597,6 +615,42 @@ public class ApplicationEx extends Application
         } else if (version < 1847) {
             if (Helper.isAccessibilityEnabled(context))
                 editor.putBoolean("send_chips", false);
+        } else if (version < 1855) {
+            if (!prefs.contains("preview_lines"))
+                editor.putInt("preview_lines", 2);
+        } else if (version < 1874) {
+            boolean cards = prefs.getBoolean("cards", true);
+            if (!cards)
+                editor.remove("view_padding");
+        } else if (version < 1888) {
+            int class_min_difference = prefs.getInt("class_min_difference", 50);
+            if (class_min_difference == 0)
+                editor.putBoolean("classification", false);
+        } else if (version < 1918) {
+            if (prefs.contains("browse_links")) {
+                boolean browse_links = prefs.getBoolean("browse_links", false);
+                editor.remove("browse_links")
+                        .putBoolean("open_with_tabs", !browse_links);
+            }
+        } else if (version < 1927) {
+            if (!prefs.contains("auto_identity"))
+                editor.putBoolean("auto_identity", true);
+        } else if (version < 1931)
+            editor.remove("button_force_light").remove("fake_dark");
+        else if (version < 1933) {
+            editor.putBoolean("lt_enabled", true);
+            if (prefs.contains("disable_top")) {
+                editor.putBoolean("use_top", !prefs.getBoolean("disable_top", false));
+                editor.remove("disable_top");
+            }
+        } else if (version < 1947)
+            editor.putBoolean("accept_unsupported", true);
+        else if (version < 1951) {
+            if (prefs.contains("open_unsafe"))
+                editor.putBoolean("open_safe", !prefs.getBoolean("open_unsafe", true));
+        } else if (version < 1955) {
+            if (!prefs.contains("doubletap"))
+                editor.putBoolean("doubletap", true);
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !BuildConfig.DEBUG)
@@ -754,6 +808,7 @@ public class ApplicationEx extends Application
         @Override
         public void onActivityDestroyed(@NonNull Activity activity) {
             log(activity, "onActivityDestroyed");
+            Helper.clearViews(activity);
         }
 
         @Override

@@ -180,7 +180,7 @@ public class FragmentIdentities extends FragmentBase {
             }
         });
 
-        animator = Helper.getFabAnimator(fab, this);
+        animator = Helper.getFabAnimator(fab, getViewLifecycleOwner());
 
         // Initialize
         FragmentDialogTheme.setBackground(getContext(), view, false);
@@ -211,11 +211,11 @@ public class FragmentIdentities extends FragmentBase {
 
                 if (identities.size() == 0) {
                     fab.setCustomSize(Helper.dp2pixels(context, 2 * 56));
-                    if (!animator.isStarted())
+                    if (animator != null && !animator.isStarted())
                         animator.start();
                 } else {
                     fab.clearCustomSize();
-                    if (animator.isStarted())
+                    if (animator != null && animator.isStarted())
                         animator.end();
                 }
             }

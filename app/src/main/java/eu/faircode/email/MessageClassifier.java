@@ -25,7 +25,6 @@ import android.os.Build;
 import android.text.TextUtils;
 import android.util.JsonReader;
 import android.util.JsonWriter;
-import android.util.MalformedJsonException;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
@@ -57,15 +56,12 @@ public class MessageClassifier {
 
     private static final int MAX_WORDS = 1000;
 
-    static synchronized void classify(EntityMessage message, EntityFolder folder, EntityFolder target, Context context) {
+    static synchronized void classify(EntityMessage message, EntityFolder folder, boolean added, Context context) {
         try {
             if (!isEnabled(context))
                 return;
 
             if (!folder.auto_classify_source)
-                return;
-
-            if (target != null && !target.auto_classify_source)
                 return;
 
             long start = new Date().getTime();
@@ -87,13 +83,16 @@ public class MessageClassifier {
                 wordClassFrequency.put(folder.account, new HashMap<>());
 
             // Classify texts
-            String classified = classify(message, folder.name, texts, target == null, context);
+            String classified = classify(message, folder.name, texts, added, context);
 
             long elapsed = new Date().getTime() - start;
             EntityLog.log(context, EntityLog.Type.Classification, message,
                     "Classifier" +
-                            " folder=" + folder.name +
-                            " message=" + message.id +
+                            " folder=" + folder.account + ":" + folder.name + ":" + folder.type +
+                            " added=" + added +
+                            " message=" + message.id + "/" + !TextUtils.isEmpty(message.msgid) +
+                            " keyword=" + message.hasKeyword(MessageHelper.FLAG_CLASSIFIED) +
+                            " filtered=" + message.hasKeyword(MessageHelper.FLAG_FILTERED) +
                             "@" + new Date(message.received) +
                             ":" + message.subject +
                             " class=" + classified +
@@ -105,7 +104,7 @@ public class MessageClassifier {
                     !classified.equals(folder.name) &&
                     !TextUtils.isEmpty(message.msgid) &&
                     !message.hasKeyword(MessageHelper.FLAG_CLASSIFIED) &&
-                    !message.hasKeyword(MessageHelper.FLAG_FILTERED) &&
+                    (!message.hasKeyword(MessageHelper.FLAG_FILTERED) || BuildConfig.DEBUG) &&
                     !accountMsgIds.get(folder.account).contains(message.msgid) &&
                     !EntityFolder.JUNK.equals(folder.type)) {
                 boolean pro = ActivityBilling.isPro(context);
@@ -127,8 +126,8 @@ public class MessageClassifier {
                     db.endTransaction();
                 }
 
-                if (message.ui_hide)
-                    accountMsgIds.get(folder.account).add(message.msgid);
+                //if (message.ui_hide)
+                //    accountMsgIds.get(folder.account).add(message.msgid);
             }
 
             dirty = true;
@@ -184,9 +183,11 @@ public class MessageClassifier {
         DB db = DB.getInstance(context);
         for (String clazz : new ArrayList<>(classMessages.get(message.account).keySet())) {
             EntityFolder folder = db.folder().getFolderByName(message.account, clazz);
-            if (folder == null) {
+            if (folder == null || !folder.auto_classify_source) {
                 EntityLog.log(context, EntityLog.Type.Classification, message,
-                        "Classifier deleting folder class=" + message.account + ":" + clazz);
+                        "Classifier deleting folder" +
+                                " class=" + message.account + ":" + clazz +
+                                " exists=" + (folder != null));
                 classMessages.get(message.account).remove(clazz);
                 for (String word : wordClassFrequency.get(message.account).keySet())
                     wordClassFrequency.get(message.account).get(word).remove(clazz);
@@ -264,9 +265,6 @@ public class MessageClassifier {
         if (BuildConfig.DEBUG)
             Log.i("Classifier words=" + state.words.size() + " " + TextUtils.join(", ", state.words));
 
-        if (chances.size() <= 1)
-            return null;
-
         // Sort classes by chance
         Collections.sort(chances, new Comparator<Chance>() {
             @Override
@@ -278,6 +276,22 @@ public class MessageClassifier {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         double class_min_chance = prefs.getInt("class_min_probability", 15) / 100.0;
         double class_min_difference = prefs.getInt("class_min_difference", 50) / 100.0;
+
+        // Special case: pick first best target class
+        if (class_min_difference == 0) {
+            for (Chance chance : chances)
+                if (chance.chance > class_min_chance) {
+                    EntityFolder target = db.folder().getFolderByName(message.account, chance.clazz);
+                    if (target != null && target.auto_classify_target) {
+                        Log.i("Classifier current=" + currentClass + " classified=" + chance.clazz);
+                        return chance.clazz;
+                    }
+                }
+            return null;
+        }
+
+        if (chances.size() <= 1)
+            return null;
 
         // Select best class
         String classification = null;
@@ -399,16 +413,11 @@ public class MessageClassifier {
 
         long start = new Date().getTime();
 
-        File file = getFile(context);
+        File file = getFile(context, false);
+        File backup = getFile(context, true);
+        backup.delete();
         if (file.exists())
-            try {
-                File backup = getBackupFile(context);
-                Log.i("Classifier backup " + backup);
-                backup.delete();
-                file.renameTo(backup);
-            } catch (Throwable ex) {
-                Log.w(ex);
-            }
+            file.renameTo(backup);
 
         Log.i("Classifier save " + file);
         try (JsonWriter writer = new JsonWriter(new BufferedWriter(new FileWriter(file)))) {
@@ -477,6 +486,8 @@ public class MessageClassifier {
             writer.endObject();
         }
 
+        backup.delete();
+
         dirty = false;
 
         long elapsed = new Date().getTime() - start;
@@ -488,21 +499,12 @@ public class MessageClassifier {
             return;
 
         clear(context);
-        File file = getFile(context);
+        File file = getFile(context, false);
+        File backup = getFile(context, true);
+        if (backup.exists())
+            file = backup;
         try {
             _load(file);
-        } catch (MalformedJsonException ex) {
-            Log.w(ex);
-            clear(context);
-            File backup = getBackupFile(context);
-            if (backup.exists())
-                try {
-                    _load(backup);
-                } catch (Throwable ex1) {
-                    Log.e(ex1);
-                    backup.delete();
-                    clear(context);
-                }
         } catch (Throwable ex) {
             Log.e(ex);
             file.delete();
@@ -689,12 +691,9 @@ public class MessageClassifier {
         return prefs.getBoolean("classification", false);
     }
 
-    static File getFile(@NonNull Context context) {
-        return new File(context.getFilesDir(), "classifier.json");
-    }
-
-    static File getBackupFile(@NonNull Context context) {
-        return new File(context.getFilesDir(), "classifier.backup");
+    static File getFile(@NonNull Context context, boolean backup) {
+        return new File(context.getFilesDir(),
+                backup ? "classifier.backup" : "classifier.json");
     }
 
     private static class State {

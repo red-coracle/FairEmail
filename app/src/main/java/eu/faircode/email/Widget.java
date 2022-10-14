@@ -27,6 +27,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.os.Build;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.RemoteViews;
@@ -53,10 +54,12 @@ public class Widget extends AppWidgetProvider {
 
                 DB db = DB.getInstance(context);
                 NumberFormat nf = NumberFormat.getIntegerInstance();
+                int colorWidgetForeground = context.getResources().getColor(R.color.colorWidgetForeground);
 
                 for (int appWidgetId : appWidgetIds) {
                     String name = prefs.getString("widget." + appWidgetId + ".name", null);
                     long account = prefs.getLong("widget." + appWidgetId + ".account", -1L);
+                    boolean daynight = prefs.getBoolean("widget." + appWidgetId + ".daynight", false);
                     boolean semi = prefs.getBoolean("widget." + appWidgetId + ".semi", true);
                     int background = prefs.getInt("widget." + appWidgetId + ".background", Color.TRANSPARENT);
                     int layout = prefs.getInt("widget." + appWidgetId + ".layout", 0);
@@ -77,7 +80,7 @@ public class Widget extends AppWidgetProvider {
                         view.putExtra("type", folders.get(0).type);
                         view.putExtra("refresh", true);
                         view.putExtra("version", version);
-                        view.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                         pi = PendingIntentCompat.getActivity(
                                 context, appWidgetId, view, PendingIntent.FLAG_UPDATE_CURRENT);
                     } else {
@@ -86,7 +89,7 @@ public class Widget extends AppWidgetProvider {
                             view.setAction("unified");
                             view.putExtra("refresh", true);
                             view.putExtra("version", version);
-                            view.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                            view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                             pi = PendingIntentCompat.getActivity(
                                     context, ActivityView.PI_UNIFIED, view, PendingIntent.FLAG_UPDATE_CURRENT);
                         } else {
@@ -94,7 +97,7 @@ public class Widget extends AppWidgetProvider {
                             view.setAction("folders:" + account);
                             view.putExtra("refresh", true);
                             view.putExtra("version", version);
-                            view.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                            view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                             pi = PendingIntentCompat.getActivity(
                                     context, appWidgetId, view, PendingIntent.FLAG_UPDATE_CURRENT);
                         }
@@ -110,8 +113,26 @@ public class Widget extends AppWidgetProvider {
                     RemoteViews views = new RemoteViews(context.getPackageName(),
                             layout == 0 ? R.layout.widget : R.layout.widget_new);
 
-                    views.setOnClickPendingIntent(android.R.id.background, pi);
+                    views.setOnClickPendingIntent(R.id.background, pi);
 
+                    if (!daynight && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                        views.setColorStateListAttr(R.id.background, "setBackgroundTintList", 0);
+
+                    // Set background
+                    if (daynight && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        views.setInt(R.id.background, "setBackgroundColor", Color.WHITE);
+                        views.setColorStateListAttr(R.id.background, "setBackgroundTintList", android.R.attr.colorBackground);
+                    } else if (semi)
+                        if (background == Color.TRANSPARENT)
+                            views.setInt(R.id.background, "setBackgroundResource",
+                                    R.drawable.widget_background);
+                        else
+                            views.setInt(R.id.background, "setBackgroundColor",
+                                    ColorUtils.setAlphaComponent(background, 127));
+                    else
+                        views.setInt(R.id.background, "setBackgroundColor", background);
+
+                    // Set image
                     if (layout == 1)
                         views.setImageViewResource(R.id.ivMessage, unseen == 0
                                 ? R.drawable.baseline_mail_outline_widget_24
@@ -120,37 +141,37 @@ public class Widget extends AppWidgetProvider {
                         views.setImageViewResource(R.id.ivMessage, unseen == 0
                                 ? R.drawable.twotone_mail_outline_24
                                 : R.drawable.baseline_mail_24);
-                    views.setTextViewText(R.id.tvCount, unseen < 100 ? nf.format(unseen) : "99+");
-                    views.setViewVisibility(R.id.tvCount, layout == 1 && unseen == 0 ? View.GONE : View.VISIBLE);
 
-                    if (!TextUtils.isEmpty(name)) {
-                        views.setTextViewText(R.id.tvAccount, name);
-                        views.setViewVisibility(R.id.tvAccount, ViewStripe.VISIBLE);
-                    }
-
-                    if (background == Color.TRANSPARENT) {
-                        if (semi)
-                            views.setInt(android.R.id.background, "setBackgroundResource", R.drawable.widget_background);
+                    // Set color
+                    if (daynight && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        views.setColorAttr(R.id.ivMessage, "setColorFilter", android.R.attr.textColorPrimary);
+                        if (layout == 0)
+                            views.setColorStateListAttr(R.id.tvCount, "setTextColor", android.R.attr.textColorPrimary);
                         else
-                            views.setInt(android.R.id.background, "setBackgroundColor", background);
-
-                        int colorWidgetForeground = context.getResources().getColor(R.color.colorWidgetForeground);
+                            views.setTextColor(R.id.tvCount, colorWidgetForeground);
+                        views.setColorStateListAttr(R.id.tvAccount, "setTextColor", android.R.attr.textColorPrimary);
+                    } else if (background == Color.TRANSPARENT) {
                         views.setInt(R.id.ivMessage, "setColorFilter", colorWidgetForeground);
                         views.setTextColor(R.id.tvCount, colorWidgetForeground);
                         views.setTextColor(R.id.tvAccount, colorWidgetForeground);
                     } else {
                         float lum = (float) ColorUtils.calculateLuminance(background);
+                        int fg = (lum > 0.7f ? Color.BLACK : colorWidgetForeground);
+                        views.setInt(R.id.ivMessage, "setColorFilter", fg);
+                        views.setTextColor(R.id.tvCount, layout == 0 ? fg : colorWidgetForeground);
+                        views.setTextColor(R.id.tvAccount, fg);
+                    }
 
-                        if (semi)
-                            background = ColorUtils.setAlphaComponent(background, 127);
+                    // Set count
+                    views.setTextViewText(R.id.tvCount, Helper.formatNumber(unseen, 99, nf));
+                    views.setViewVisibility(R.id.tvCount, layout == 1 && unseen == 0 ? View.GONE : View.VISIBLE);
 
-                        views.setInt(android.R.id.background, "setBackgroundColor", background);
-
-                        if (lum > 0.7f) {
-                            views.setInt(R.id.ivMessage, "setColorFilter", Color.BLACK);
-                            views.setTextColor(R.id.tvCount, Color.BLACK);
-                            views.setTextColor(R.id.tvAccount, Color.BLACK);
-                        }
+                    // Set account name
+                    if (TextUtils.isEmpty(name))
+                        views.setViewVisibility(R.id.tvAccount, ViewStripe.GONE);
+                    else {
+                        views.setTextViewText(R.id.tvAccount, name);
+                        views.setViewVisibility(R.id.tvAccount, ViewStripe.VISIBLE);
                     }
 
                     int pad = Helper.dp2pixels(context, layout == 0 ? 3 : 6);

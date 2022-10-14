@@ -40,6 +40,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -49,7 +50,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.SwitchCompat;
-import androidx.lifecycle.Lifecycle;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.preference.PreferenceManager;
 
@@ -57,12 +57,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class FragmentOptionsBehavior extends FragmentBase implements SharedPreferences.OnSharedPreferenceChangeListener {
+    private View view;
+    private ImageButton ibHelp;
+    private SwitchCompat swRestoreOnLaunch;
+    private TextView tvRestoreOnLaunchHint;
     private SwitchCompat swSyncOnlaunch;
     private SwitchCompat swDoubleBack;
     private SwitchCompat swConversationActions;
     private SwitchCompat swConversationActionsReplies;
     private SwitchCompat swLanguageDetection;
     private EditText etDefaultSnooze;
+    private SwitchCompat swPhotoPicker;
     private SwitchCompat swPull;
     private SwitchCompat swAutoScroll;
     private SwitchCompat swQuickFilter;
@@ -99,8 +104,8 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
     final static int DEFAULT_SWIPE_SENSITIVITY = 7;
 
     private final static String[] RESET_OPTIONS = new String[]{
-            "sync_on_launch", "double_back", "conversation_actions", "conversation_actions_replies", "language_detection",
-            "default_snooze",
+            "restore_on_launch", "sync_on_launch", "double_back", "conversation_actions", "conversation_actions_replies", "language_detection",
+            "photo_picker", "default_snooze",
             "pull", "autoscroll", "quick_filter", "quick_scroll", "swipe_sensitivity", "foldernav",
             "doubletap", "swipenav", "volumenav", "reversed", "swipe_close", "swipe_move",
             "autoexpand", "expand_first", "expand_all", "expand_one", "collapse_multiple",
@@ -116,16 +121,20 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
         setSubtitle(R.string.title_setup);
         setHasOptionsMenu(true);
 
-        View view = inflater.inflate(R.layout.fragment_options_behavior, container, false);
+        view = inflater.inflate(R.layout.fragment_options_behavior, container, false);
 
         // Get controls
 
+        ibHelp = view.findViewById(R.id.ibHelp);
+        swRestoreOnLaunch = view.findViewById(R.id.swRestoreOnLaunch);
+        tvRestoreOnLaunchHint = view.findViewById(R.id.tvRestoreOnLaunchHint);
         swSyncOnlaunch = view.findViewById(R.id.swSyncOnlaunch);
         swDoubleBack = view.findViewById(R.id.swDoubleBack);
         swConversationActions = view.findViewById(R.id.swConversationActions);
         swConversationActionsReplies = view.findViewById(R.id.swConversationActionsReplies);
         swLanguageDetection = view.findViewById(R.id.swLanguageDetection);
         etDefaultSnooze = view.findViewById(R.id.etDefaultSnooze);
+        swPhotoPicker = view.findViewById(R.id.swPhotoPicker);
         swPull = view.findViewById(R.id.swPull);
         swAutoScroll = view.findViewById(R.id.swAutoScroll);
         swQuickFilter = view.findViewById(R.id.swQuickFilter);
@@ -164,10 +173,25 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
 
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
 
+        ibHelp.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Helper.view(v.getContext(), Helper.getSupportUri(v.getContext(), "Options:behavior"), false);
+            }
+        });
+
         swDoubleBack.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
                 prefs.edit().putBoolean("double_back", checked).apply();
+            }
+        });
+
+        tvRestoreOnLaunchHint.setText(getString(R.string.title_advanced_restore_on_launch_hint, ActivityMain.RESTORE_STATE_INTERVAL));
+        swRestoreOnLaunch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
+                prefs.edit().putBoolean("restore_on_launch", checked).apply();
             }
         });
 
@@ -224,6 +248,14 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
             @Override
             public void afterTextChanged(Editable s) {
                 // Do nothing
+            }
+        });
+
+        swPhotoPicker.setVisibility(Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ? View.GONE : View.VISIBLE);
+        swPhotoPicker.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
+                prefs.edit().putBoolean("photo_picker", checked).apply();
             }
         });
 
@@ -490,8 +522,7 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
         if ("default_snooze".equals(key))
             return;
 
-        if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
-            setOptions();
+        setOptions();
     }
 
     @Override
@@ -510,8 +541,12 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
     }
 
     private void setOptions() {
+        if (view == null || getContext() == null)
+            return;
+
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
 
+        swRestoreOnLaunch.setChecked(prefs.getBoolean("restore_on_launch", false));
         swSyncOnlaunch.setChecked(prefs.getBoolean("sync_on_launch", false));
         swDoubleBack.setChecked(prefs.getBoolean("double_back", false));
         swConversationActions.setChecked(prefs.getBoolean("conversation_actions", Helper.isGoogle()));
@@ -523,6 +558,8 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
         etDefaultSnooze.setText(default_snooze == 1 ? null : Integer.toString(default_snooze));
         etDefaultSnooze.setHint("1");
 
+        swPhotoPicker.setChecked(prefs.getBoolean("photo_picker", true));
+
         swPull.setChecked(prefs.getBoolean("pull", true));
         swAutoScroll.setChecked(prefs.getBoolean("autoscroll", false));
         swQuickFilter.setChecked(prefs.getBoolean("quick_filter", false));
@@ -533,7 +570,7 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
 
         swFolderNav.setChecked(prefs.getBoolean("foldernav", false));
 
-        swDoubleTap.setChecked(prefs.getBoolean("doubletap", true));
+        swDoubleTap.setChecked(prefs.getBoolean("doubletap", false));
         swSwipeNav.setChecked(prefs.getBoolean("swipenav", true));
         swVolumeNav.setChecked(prefs.getBoolean("volumenav", false));
         swReversed.setChecked(prefs.getBoolean("reversed", false));
@@ -632,7 +669,9 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
                             EntityFolder left = (EntityFolder) spLeft.getSelectedItem();
                             EntityFolder right = (EntityFolder) spRight.getSelectedItem();
 
-                            final Context context = getContext();
+                            if ((left != null && EntityMessage.SWIPE_ACTION_HIDE.equals(left.id)) ||
+                                    (right != null && EntityMessage.SWIPE_ACTION_HIDE.equals(right.id)))
+                                prefs.edit().putBoolean("button_hide", true).apply();
 
                             Bundle args = new Bundle();
                             args.putLong("left", left == null ? 0 : left.id);
@@ -666,7 +705,7 @@ public class FragmentOptionsBehavior extends FragmentBase implements SharedPrefe
 
                                 @Override
                                 protected void onExecuted(Bundle args, Void data) {
-                                    ToastEx.makeText(context, R.string.title_completed, Toast.LENGTH_LONG).show();
+                                    ToastEx.makeText(getContext(), R.string.title_completed, Toast.LENGTH_LONG).show();
                                 }
 
                                 @Override

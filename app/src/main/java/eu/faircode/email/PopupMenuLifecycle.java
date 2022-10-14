@@ -45,7 +45,7 @@ import androidx.lifecycle.OnLifecycleEvent;
 public class PopupMenuLifecycle extends PopupMenu {
 
     public PopupMenuLifecycle(@NonNull Context context, LifecycleOwner owner, @NonNull View anchor) {
-        super(new ContextThemeWrapper(context, R.style.popupMenuStyle), anchor);
+        super(context, anchor, Gravity.NO_GRAVITY, R.attr.popupMenuStyle, R.style.popupMenuStyle);
         Log.i("Instantiate " + this);
 
         owner.getLifecycle().addObserver(new LifecycleObserver() {
@@ -117,7 +117,6 @@ public class PopupMenuLifecycle extends PopupMenu {
 
     static void insertIcon(Context context, MenuItem menuItem, boolean submenu) {
         Drawable icon = menuItem.getIcon();
-
         if (icon == null)
             icon = new ColorDrawable(Color.TRANSPARENT);
         else {

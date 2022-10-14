@@ -19,11 +19,9 @@ package eu.faircode.email;
     Copyright 2018-2022 by Marcel Bokhorst (M66B)
 */
 
-import static androidx.webkit.WebSettingsCompat.FORCE_DARK_OFF;
-import static androidx.webkit.WebSettingsCompat.FORCE_DARK_ON;
-
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -42,7 +40,10 @@ import android.webkit.WebViewClient;
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 import androidx.webkit.WebSettingsCompat;
+import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
+
+import java.util.Objects;
 
 public class WebViewEx extends WebView implements DownloadListener, View.OnLongClickListener {
     private int height;
@@ -50,6 +51,7 @@ public class WebViewEx extends WebView implements DownloadListener, View.OnLongC
     private boolean legacy;
     private IWebView intf;
     private Runnable onPageLoaded;
+    private String hash;
 
     private static String userAgent = null;
 
@@ -80,10 +82,11 @@ public class WebViewEx extends WebView implements DownloadListener, View.OnLongC
         settings.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING);
 
         settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(true); // default
         settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-        if (WebViewEx.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE))
+        if (WebViewEx.isFeatureSupported(context, WebViewFeature.SAFE_BROWSING_ENABLE))
             WebSettingsCompat.setSafeBrowsingEnabled(settings, safe_browsing);
     }
 
@@ -109,19 +112,24 @@ public class WebViewEx extends WebView implements DownloadListener, View.OnLongC
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         boolean compact = prefs.getBoolean("compact", false);
         int zoom = prefs.getInt("view_zoom", compact ? 0 : 1);
+        boolean browser_zoom = (prefs.getBoolean("browser_zoom", false) && BuildConfig.DEBUG);
         int message_zoom = prefs.getInt("message_zoom", 100);
         boolean monospaced = prefs.getBoolean("monospaced", false);
-        legacy = prefs.getBoolean("webview_legacy", false);
+        legacy = (prefs.getBoolean("webview_legacy", false) && BuildConfig.DEBUG);
 
         WebSettings settings = getSettings();
 
         boolean dark = Helper.isDarkTheme(context);
-        boolean canForce = WebViewEx.isFeatureSupported(WebViewFeature.FORCE_DARK);
-        if (canForce)
-            WebSettingsCompat.setForceDark(settings, dark && !force_light ? FORCE_DARK_ON : FORCE_DARK_OFF);
-        setBackgroundColor(canForce && force_light ? Color.WHITE : Color.TRANSPARENT);
 
-        float fontSize = 16f /* Default */ * message_zoom / 100f;
+        // https://developer.android.com/reference/android/webkit/WebSettings#setAlgorithmicDarkeningAllowed(boolean)
+        // https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme
+        boolean canDarken = WebViewEx.isFeatureSupported(context, WebViewFeature.ALGORITHMIC_DARKENING);
+        if (canDarken && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, dark && !force_light);
+        setBackgroundColor(canDarken && dark && !force_light ? Color.TRANSPARENT : Color.WHITE);
+
+        float fontSize = 16f /* Default */ *
+                (browser_zoom ? 1f : message_zoom / 100f);
         if (zoom == 0 /* small */)
             fontSize *= HtmlHelper.FONT_SMALL;
         else if (zoom == 2 /* large */)
@@ -215,6 +223,27 @@ public class WebViewEx extends WebView implements DownloadListener, View.OnLongC
     }
 
     @Override
+    public void loadDataWithBaseURL(String baseUrl, String data, String mimeType, String encoding, String historyUrl) {
+        try {
+            // Prevent flickering
+            String h = (data == null ? null : Helper.md5(data.getBytes()));
+            if (Objects.equals(hash, h))
+                return;
+            this.hash = h;
+        } catch (Throwable ex) {
+            Log.w(ex);
+        }
+
+        super.loadDataWithBaseURL(baseUrl, data, mimeType, encoding, historyUrl);
+    }
+
+    @Override
+    public void setMinimumHeight(int minHeight) {
+        super.setMinimumHeight(minHeight);
+        Log.i("Set min height=" + minHeight);
+    }
+
+    @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         if (legacy) {
             if (height > getMinimumHeight())
@@ -284,7 +313,20 @@ public class WebViewEx extends WebView implements DownloadListener, View.OnLongC
             clampedY = true;
         }
 
-        Log.i("onOverScrolled clamped=" + clampedY + " new=" + newScrollY + " dy=" + deltaY);
+        Log.i("onOverScrolled" +
+                " clampedY=" + clampedY +
+                " scrollY=" + scrollY +
+                " deltaY=" + deltaY +
+                " RangeY=" + scrollRangeY +
+                " maxY=" + maxOverScrollY +
+                " newY=" + (scrollY + deltaY) + "/" + newScrollY +
+                " dy=" + deltaY +
+                " top=" + top +
+                " bottom=" + bottom);
+
+        if (Math.abs(deltaY) > bottom - top)
+            deltaY = (deltaY > 0 ? 1 : -1) * (bottom - top);
+
         intf.onOverScrolled(scrollX, scrollY, deltaX, deltaY, clampedX, clampedY);
 
         return super.overScrollBy(deltaX, deltaY, scrollX, scrollY, scrollRangeX, scrollRangeY, maxOverScrollX, maxOverScrollY, isTouchEvent);
@@ -343,7 +385,26 @@ public class WebViewEx extends WebView implements DownloadListener, View.OnLongC
         return (yscale > 1.01);
     }
 
-    public static boolean isFeatureSupported(String feature) {
+    public static boolean isFeatureSupported(Context context, String feature) {
+        if (WebViewFeature.ALGORITHMIC_DARKENING.equals(feature)) {
+            if (BuildConfig.DEBUG) {
+                SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+                boolean fake_dark = prefs.getBoolean("fake_dark", false);
+                if (fake_dark)
+                    return false;
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q)
+                return false;
+
+            try {
+                PackageInfo pkg = WebViewCompat.getCurrentWebViewPackage(context);
+                if (pkg != null && pkg.versionCode / 100000 < 5005) // Version 102.*
+                    return false;
+            } catch (Throwable ex) {
+                Log.e(ex);
+            }
+        }
+
         try {
             return WebViewFeature.isFeatureSupported(feature);
         } catch (Throwable ex) {

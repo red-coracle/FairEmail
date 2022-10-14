@@ -4,10 +4,13 @@
     <string name="app_changelog">سجل التغييرات</string>
     <string name="app_welcome">فيرميل هو تطبيق بريد إلكتروني مفتوح المصدر يركز على الخصوصية والأمان. لهذا السبب ، قد تعمل بعض الميزات بشكل مختلف عن ما اعتدت عليه.</string>
     <string name="app_limitations">على سبيل المثال، يتم إعادة تنسيق الرسائل بشكل افتراضي لإزالة العناصر غير الآمنة وتحسين إمكانية القراءة، كما ويجب تأكيد فتح الروابط من أجل السلامة. وكلاهما يمكن أن يُعطلا إذا رُغب في ذلك.</string>
+    <string name="app_unsupported">الأخطاء في إصدار الأندرويد لهذا الجهاز المعين تسبب أعطال</string>
+    <string name="app_data_loss">قد تفقد جميع البيانات</string>
+    <string name="app_continue">استمر على أي حال</string>
     <string name="app_exit">أنقر مرة أخرى للخروج من التطبيق</string>
     <string name="app_cake">مساحة تخزين غير كافية</string>
     <string name="app_updated">آخر تحديث: %1$s</string>
-    <string name="channel_service">إستلام</string>
+    <string name="app_download">نُزّل من: %1$s</string>
     <string name="channel_send">أرسل</string>
     <string name="channel_notification">البريد الإلكتروني</string>
     <string name="channel_progress">التفدم</string>
@@ -138,7 +141,6 @@
     <string name="title_setup_other">مزود اخر</string>
     <string name="title_setup_gmail_rationale">الرجاء منح الصلاحيات لتحديد الحساب وقراءة اسمك</string>
     <string name="title_setup_gmail_permissions">جوجل سوف تطلب موافقتك لقراءة, تأليف, أرسال وحذف نهائي لكل الرسائل. فيرميل لن يمسح رسائلك ابدا بدون موافقتك.</string>
-    <string name="title_setup_gmail_drafts">إذا تعذر الوصول إلى مجلد المسودات بواسطة IMAP ، يمكن إصلاح هذا في إعدادات تسمية Gmail</string>
     <string name="title_setup_oauth_rationale">السماح بالوصول إلى حسابك %1$s</string>
     <string name="title_setup_oauth_authorize">ترخيص</string>
     <string name="title_setup_select_account">اختيار الحساب</string>
@@ -277,6 +279,8 @@
     <string name="title_empty_trash">إفراغ سلّة المهملات</string>
     <string name="title_edit_properties">تعديل الخصائص</string>
     <string name="title_edit_rules">تعديل القواعد</string>
+    <string name="title_contact_email">البريد الإلكتروني</string>
+    <string name="title_contact_name">الإسم</string>
     <string name="title_folder_name">إسم المجلد</string>
     <string name="title_display_name">الاسم المعروض</string>
     <string name="title_show_folders">اظهار المجلدات المخفية</string>
@@ -330,7 +334,6 @@
     <string name="title_archive">أرشيف</string>
     <string name="title_reply">رد</string>
     <string name="title_reply_to_all">الرد على الكل</string>
-    <string name="title_open_with">افتح باستخدام</string>
     <string name="title_no_folder">المجلد غير موجود</string>
     <string name="title_accross_remark">سوف يتم تنزيل الرسائل المنقولة بين الحسابات مرة أخرى و قد يكلف ذلك استخداما في حجم البيانات</string>
     <string name="title_attachment_saved">حفظ المرفقات</string>
@@ -391,6 +394,9 @@
     <string name="title_search_flag_flagged">مميّزة بنجمة</string>
     <string name="title_search_device">البحث في الجهاز</string>
     <string name="title_search_server">البحث في الخادم</string>
+    <string name="title_save_search_name">الإسم</string>
+    <string name="title_save_search_order">الترتيب</string>
+    <string name="title_save_search_color">اللون</string>
     <string name="title_sort_on">الفرز حسب</string>
     <string name="title_sort_on_time">التاريخ</string>
     <string name="title_sort_on_unread">غير مقروءة</string>
@@ -405,6 +411,7 @@
     <string name="title_next">التالي</string>
     <string name="title_edit_signature_text">نص التوقيع</string>
     <string name="title_edit_signature_image">إرفاق صورة</string>
+    <string name="title_answer_define_name">الإسم</string>
     <string name="title_answer_reply">نموذج الرد</string>
     <string name="title_answer_name">اسم النموذج</string>
     <string name="title_answer_text">نص النموذج</string>
@@ -522,7 +529,6 @@
     <string name="title_pro_invalid">استجابة غير صالحة</string>
     <string name="title_unexpected_error">لقد حدث خطأ غير متوقع</string>
     <string name="title_log">السجل</string>
-    <string name="title_auto_scroll">تمرير تلقائي</string>
     <string name="title_log_clear">محو</string>
     <string name="title_debug_info_remark">الرجاء أوصف المشكلة وبيّن وقت المشكلة</string>
     <string name="title_widget_account_all">الكل</string>
@@ -540,6 +546,7 @@
     <string-array name="pollIntervalNames">
         <item>دائماً</item>
         <item>كل 5 دقيقة</item>
+        <item>كل 10 دقيقة</item>
         <item>كل 15 دقيقة</item>
         <item>كل 30 دقيقة</item>
         <item>كل ساعة</item>
@@ -606,4 +613,17 @@
     <!-- https://www.bouncycastle.org/specifications.html -->
     <!-- https://datatracker.ietf.org/doc/html/rfc5751#page-29 -->
     <!-- https://datatracker.ietf.org/doc/html/rfc5751#section-2.7 -->
+    <string-array name="contactTypes">
+        <item>Recipient</item>
+        <item>المُرسِل</item>
+        <item>محظور</item>
+        <item>Not blocked</item>
+    </string-array>
+    <string-array name="contactGroupTypes">
+        <item>Any</item>
+        <item>Home</item>
+        <item>Work</item>
+        <item>أخرى</item>
+        <item>Mobile</item>
+    </string-array>
 </resources>

@@ -35,6 +35,7 @@ import org.json.JSONObject;
 
 import java.util.Locale;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 import javax.mail.Address;
@@ -55,6 +56,8 @@ public class EntityIdentity {
 
     @PrimaryKey(autoGenerate = true)
     public Long id;
+    @NonNull
+    public String uuid = UUID.randomUUID().toString();
     @NonNull
     public String name;
     @NonNull
@@ -105,6 +108,8 @@ public class EntityIdentity {
     public String internal;
     @NonNull
     public Boolean unicode = false;
+    @NonNull
+    public Boolean octetmime = false;
     @NonNull
     public Boolean plain_only = false; // obsolete
     @NonNull
@@ -185,6 +190,7 @@ public class EntityIdentity {
     public JSONObject toJSON() throws JSONException {
         JSONObject json = new JSONObject();
         json.put("id", id);
+        json.put("uuid", uuid);
         json.put("name", name);
         json.put("email", email);
         // not account
@@ -220,6 +226,7 @@ public class EntityIdentity {
         json.put("internal", internal);
 
         json.put("unicode", unicode);
+        json.put("octetmime", octetmime);
         // not plain_only
         json.put("sign_default", sign_default);
         json.put("encrypt_default", encrypt_default);
@@ -241,6 +248,10 @@ public class EntityIdentity {
     public static EntityIdentity fromJSON(JSONObject json) throws JSONException {
         EntityIdentity identity = new EntityIdentity();
         identity.id = json.getLong("id");
+
+        if (json.has("uuid"))
+            identity.uuid = json.getString("uuid");
+
         identity.name = json.getString("name");
         identity.email = json.getString("email");
         if (json.has("display") && !json.isNull("display"))
@@ -297,6 +308,9 @@ public class EntityIdentity {
         if (json.has("unicode"))
             identity.unicode = json.getBoolean("unicode");
 
+        if (json.has("octetmime"))
+            identity.octetmime = json.getBoolean("octetmime");
+
         if (json.has("sign_default"))
             identity.sign_default = json.getBoolean("sign_default");
         if (json.has("encrypt_default"))
@@ -309,7 +323,8 @@ public class EntityIdentity {
     public boolean equals(Object obj) {
         if (obj instanceof EntityIdentity) {
             EntityIdentity other = (EntityIdentity) obj;
-            return (this.name.equals(other.name) &&
+            return (Objects.equals(this.uuid, other.uuid) &&
+                    this.name.equals(other.name) &&
                     this.email.equals(other.email) &&
                     this.account.equals(other.account) &&
                     Objects.equals(this.display, other.display) &&

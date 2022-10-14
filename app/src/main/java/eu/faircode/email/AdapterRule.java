@@ -24,6 +24,7 @@ import android.content.Intent;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
 import android.text.style.RelativeSizeSpan;
 import android.text.style.StyleSpan;
@@ -55,7 +56,6 @@ import java.io.IOException;
 import java.text.DateFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import javax.mail.MessagingException;
@@ -116,87 +116,140 @@ public class AdapterRule extends RecyclerView.Adapter<AdapterRule.ViewHolder> {
             ivStop.setVisibility(rule.stop ? View.VISIBLE : View.INVISIBLE);
 
             try {
-                List<String> condition = new ArrayList<>();
+                List<Condition> conditions = new ArrayList<>();
                 JSONObject jcondition = new JSONObject(rule.condition);
                 if (jcondition.has("sender"))
-                    condition.add(context.getString(R.string.title_rule_sender));
+                    conditions.add(new Condition(context.getString(R.string.title_rule_sender),
+                            jcondition.getJSONObject("sender").optString("value"),
+                            jcondition.getJSONObject("sender").optBoolean("regex")));
                 if (jcondition.has("recipient"))
-                    condition.add(context.getString(R.string.title_rule_recipient));
+                    conditions.add(new Condition(context.getString(R.string.title_rule_recipient),
+                            jcondition.getJSONObject("recipient").optString("value"),
+                            jcondition.getJSONObject("recipient").optBoolean("regex")));
                 if (jcondition.has("subject"))
-                    condition.add(context.getString(R.string.title_rule_subject));
+                    conditions.add(new Condition(context.getString(R.string.title_rule_subject),
+                            jcondition.getJSONObject("subject").optString("value"),
+                            jcondition.getJSONObject("subject").optBoolean("regex")));
+                if (jcondition.optBoolean("attachments"))
+                    conditions.add(new Condition(context.getString(R.string.title_rule_attachments),
+                            null, null));
                 if (jcondition.has("header"))
-                    condition.add(context.getString(R.string.title_rule_header));
+                    conditions.add(new Condition(context.getString(R.string.title_rule_header),
+                            jcondition.getJSONObject("header").optString("value"),
+                            jcondition.getJSONObject("header").optBoolean("regex")));
                 if (jcondition.has("body"))
-                    condition.add(context.getString(R.string.title_rule_body));
+                    conditions.add(new Condition(context.getString(R.string.title_rule_body),
+                            jcondition.getJSONObject("body").optString("value"),
+                            jcondition.getJSONObject("body").optBoolean("regex")));
                 if (jcondition.has("date"))
-                    condition.add(context.getString(R.string.title_rule_time_abs));
+                    conditions.add(new Condition(context.getString(R.string.title_rule_time_abs),
+                            null, null));
                 if (jcondition.has("schedule"))
-                    condition.add(context.getString(R.string.title_rule_time_rel));
-                tvCondition.setText(TextUtils.join(" & ", condition));
+                    conditions.add(new Condition(context.getString(R.string.title_rule_time_rel),
+                            null, null));
+
+                SpannableStringBuilder ssb = new SpannableStringBuilderEx();
+                for (Condition condition : conditions) {
+                    if (ssb.length() > 0)
+                        ssb.append("\n");
+                    ssb.append(condition.name);
+                    if (!TextUtils.isEmpty(condition.condition)) {
+                        ssb.append(" \"");
+                        int start = ssb.length();
+                        ssb.append(condition.condition);
+                        ssb.setSpan(new StyleSpan(Typeface.ITALIC), start, ssb.length(), 0);
+                        ssb.append("\"");
+                        if (Boolean.TRUE.equals(condition.regex))
+                            ssb.append(" (*)");
+                    }
+                }
+
+                tvCondition.setText(ssb);
             } catch (Throwable ex) {
                 tvCondition.setText(ex.getMessage());
             }
 
             try {
                 JSONObject jaction = new JSONObject(rule.action);
+
+                String to = null;
+                boolean resend = false;
                 int type = jaction.getInt("type");
-                switch (type) {
-                    case EntityRule.TYPE_NOOP:
-                        tvAction.setText(R.string.title_rule_noop);
-                        break;
-                    case EntityRule.TYPE_SEEN:
-                        tvAction.setText(R.string.title_rule_seen);
-                        break;
-                    case EntityRule.TYPE_UNSEEN:
-                        tvAction.setText(R.string.title_rule_unseen);
-                        break;
-                    case EntityRule.TYPE_HIDE:
-                        tvAction.setText(R.string.title_rule_hide);
-                        break;
-                    case EntityRule.TYPE_IGNORE:
-                        tvAction.setText(R.string.title_rule_ignore);
-                        break;
-                    case EntityRule.TYPE_SNOOZE:
-                        tvAction.setText(R.string.title_rule_snooze);
-                        break;
-                    case EntityRule.TYPE_FLAG:
-                        tvAction.setText(R.string.title_rule_flag);
-                        break;
-                    case EntityRule.TYPE_IMPORTANCE:
-                        tvAction.setText(R.string.title_rule_importance);
-                        break;
-                    case EntityRule.TYPE_KEYWORD:
-                        tvAction.setText(R.string.title_rule_keyword);
-                        break;
-                    case EntityRule.TYPE_MOVE:
-                        tvAction.setText(R.string.title_rule_move);
-                        break;
-                    case EntityRule.TYPE_COPY:
-                        tvAction.setText(R.string.title_rule_copy);
-                        break;
-                    case EntityRule.TYPE_ANSWER:
-                        tvAction.setText(R.string.title_rule_answer);
-                        break;
-                    case EntityRule.TYPE_TTS:
-                        tvAction.setText(R.string.title_rule_tts);
-                        break;
-                    case EntityRule.TYPE_AUTOMATION:
-                        tvAction.setText(R.string.title_rule_automation);
-                        break;
-                    case EntityRule.TYPE_DELETE:
-                        tvAction.setText(R.string.title_rule_delete);
-                        break;
-                    case EntityRule.TYPE_SOUND:
-                        tvAction.setText(R.string.title_rule_sound);
-                        break;
-                    default:
-                        throw new IllegalArgumentException("Unknown action type=" + type);
+                if (type == EntityRule.TYPE_SNOOZE) {
+                    int duration = jaction.optInt("duration", 0);
+                    setAction(getAction(type), Integer.toString(duration));
+                } else if (type == EntityRule.TYPE_IMPORTANCE) {
+                    int importance = jaction.optInt("value");
+
+                    String value = null;
+                    if (importance == EntityMessage.PRIORITIY_LOW)
+                        value = context.getString(R.string.title_importance_low);
+                    else if (importance == EntityMessage.PRIORITIY_NORMAL)
+                        value = context.getString(R.string.title_importance_normal);
+                    else if (importance == EntityMessage.PRIORITIY_HIGH)
+                        value = context.getString(R.string.title_importance_high);
+
+                    setAction(getAction(type), value);
+                } else if (type == EntityRule.TYPE_KEYWORD) {
+                    setAction(getAction(type), jaction.optString("keyword"));
+                } else if (type == EntityRule.TYPE_ANSWER) {
+                    to = jaction.optString("to");
+                    if (!TextUtils.isEmpty(to)) {
+                        resend = jaction.optBoolean("resend");
+                        setAction(resend ? R.string.title_rule_resend : getAction(type), to);
+                    }
+                } else
+                    setAction(getAction(type), null);
+
+                if (type == EntityRule.TYPE_MOVE || type == EntityRule.TYPE_COPY ||
+                        (type == EntityRule.TYPE_ANSWER && TextUtils.isEmpty(to))) {
+                    Bundle args = new Bundle();
+                    args.putLong("id", rule.id);
+                    args.putInt("type", type);
+                    args.putLong("target", jaction.optLong("target", -1));
+                    args.putLong("answer", jaction.optLong("answer", -1));
+
+                    new SimpleTask<String>() {
+                        @Override
+                        protected String onExecute(Context context, Bundle args) throws Throwable {
+                            DB db = DB.getInstance(context);
+                            int type = args.getInt("type");
+                            if (type == EntityRule.TYPE_MOVE || type == EntityRule.TYPE_COPY) {
+                                long id = args.getLong("target");
+                                EntityFolder folder = db.folder().getFolder(id);
+                                return (folder == null ? null : folder.name);
+                            } else if (type == EntityRule.TYPE_ANSWER) {
+                                long id = args.getLong("answer");
+                                EntityAnswer answer = db.answer().getAnswer(id);
+                                return (answer == null ? null : answer.name);
+                            } else
+                                return null;
+                        }
+
+                        @Override
+                        protected void onExecuted(Bundle args, String value) {
+                            int pos = getAdapterPosition();
+                            if (pos == RecyclerView.NO_POSITION)
+                                return;
+
+                            long id = args.getLong("id");
+                            if (id != AdapterRule.this.getItemId(pos))
+                                return;
+
+                            setAction(getAction(args.getInt("type")), value);
+                        }
+
+                        @Override
+                        protected void onException(Bundle args, Throwable ex) {
+                            // Ignored
+                        }
+                    }.execute(context, owner, args, "rule:folder");
                 }
             } catch (Throwable ex) {
                 tvAction.setText(ex.getMessage());
             }
 
-            tvLastApplied.setText(rule.last_applied == null ? null : DF.format(rule.last_applied));
+            tvLastApplied.setText(rule.last_applied == null ? "-" : DF.format(rule.last_applied));
             tvApplied.setText(NF.format(rule.applied));
         }
 
@@ -294,9 +347,18 @@ public class AdapterRule extends RecyclerView.Adapter<AdapterRule.ViewHolder> {
                     args.putLong("id", rule.id);
 
                     new SimpleTask<Integer>() {
+                        private Toast toast = null;
+
                         @Override
                         protected void onPreExecute(Bundle args) {
-                            ToastEx.makeText(context, R.string.title_executing, Toast.LENGTH_LONG).show();
+                            toast = ToastEx.makeText(context, R.string.title_executing, Toast.LENGTH_LONG);
+                            toast.show();
+                        }
+
+                        @Override
+                        protected void onPostExecute(Bundle args) {
+                            if (toast != null)
+                                toast.cancel();
                         }
 
                         @Override
@@ -347,6 +409,14 @@ public class AdapterRule extends RecyclerView.Adapter<AdapterRule.ViewHolder> {
                             ToastEx.makeText(context,
                                     context.getString(R.string.title_rule_applied, applied),
                                     Toast.LENGTH_LONG).show();
+                        }
+
+                        @Override
+                        protected void onDestroyed(Bundle args) {
+                            if (toast != null) {
+                                toast.cancel();
+                                toast = null;
+                            }
                         }
 
                         @Override
@@ -407,6 +477,72 @@ public class AdapterRule extends RecyclerView.Adapter<AdapterRule.ViewHolder> {
 
             return true;
         }
+
+        private void setAction(int resid, String value) {
+            if (TextUtils.isEmpty(value))
+                tvAction.setText(resid);
+            else {
+                SpannableStringBuilder ssb = new SpannableStringBuilderEx();
+                ssb.append(context.getString(resid));
+                ssb.append(" \"");
+                int start = ssb.length();
+                ssb.append(value);
+                ssb.setSpan(new StyleSpan(Typeface.ITALIC), start, ssb.length(), 0);
+                ssb.append("\"");
+                tvAction.setText(ssb);
+            }
+        }
+
+        private int getAction(int type) {
+            switch (type) {
+                case EntityRule.TYPE_NOOP:
+                    return R.string.title_rule_noop;
+                case EntityRule.TYPE_SEEN:
+                    return R.string.title_rule_seen;
+                case EntityRule.TYPE_UNSEEN:
+                    return R.string.title_rule_unseen;
+                case EntityRule.TYPE_HIDE:
+                    return R.string.title_rule_hide;
+                case EntityRule.TYPE_IGNORE:
+                    return R.string.title_rule_ignore;
+                case EntityRule.TYPE_SNOOZE:
+                    return R.string.title_rule_snooze;
+                case EntityRule.TYPE_FLAG:
+                    return R.string.title_rule_flag;
+                case EntityRule.TYPE_IMPORTANCE:
+                    return R.string.title_rule_importance;
+                case EntityRule.TYPE_KEYWORD:
+                    return R.string.title_rule_keyword;
+                case EntityRule.TYPE_MOVE:
+                    return R.string.title_rule_move;
+                case EntityRule.TYPE_COPY:
+                    return R.string.title_rule_copy;
+                case EntityRule.TYPE_ANSWER:
+                    return R.string.title_rule_answer;
+                case EntityRule.TYPE_TTS:
+                    return R.string.title_rule_tts;
+                case EntityRule.TYPE_AUTOMATION:
+                    return R.string.title_rule_automation;
+                case EntityRule.TYPE_DELETE:
+                    return R.string.title_rule_delete;
+                case EntityRule.TYPE_SOUND:
+                    return R.string.title_rule_sound;
+                default:
+                    throw new IllegalArgumentException("Unknown action type=" + type);
+            }
+        }
+
+        private class Condition {
+            private final String name;
+            private final String condition;
+            private final Boolean regex;
+
+            Condition(String name, String condition, Boolean regex) {
+                this.name = name;
+                this.condition = condition;
+                this.regex = regex;
+            }
+        }
     }
 
     AdapterRule(Fragment parentFragment) {
@@ -441,24 +577,9 @@ public class AdapterRule extends RecyclerView.Adapter<AdapterRule.ViewHolder> {
         else {
             items = new ArrayList<>();
             String query = search.toLowerCase().trim();
-            for (TupleRuleEx rule : rules) {
-                if (rule.name.toLowerCase().contains(query))
+            for (TupleRuleEx rule : rules)
+                if (rule.matches(query))
                     items.add(rule);
-                else
-                    try {
-                        JSONObject jcondition = new JSONObject(rule.condition);
-                        Iterator<String> keys = jcondition.keys();
-                        while (keys.hasNext()) {
-                            String key = keys.next();
-                            if (jcondition.get(key).toString().toLowerCase().contains(query)) {
-                                items.add(rule);
-                                break;
-                            }
-                        }
-                    } catch (JSONException ex) {
-                        Log.e(ex);
-                    }
-            }
         }
 
         DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new DiffCallback(selected, items), false);
@@ -486,7 +607,12 @@ public class AdapterRule extends RecyclerView.Adapter<AdapterRule.ViewHolder> {
                 Log.d("Changed @" + position + " #" + count);
             }
         });
-        diff.dispatchUpdatesTo(this);
+
+        try {
+            diff.dispatchUpdatesTo(this);
+        } catch (Throwable ex) {
+            Log.e(ex);
+        }
     }
 
     public void search(String query) {

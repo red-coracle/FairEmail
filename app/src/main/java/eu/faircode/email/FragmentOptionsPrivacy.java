@@ -20,6 +20,8 @@ package eu.faircode.email;
 */
 
 import android.app.Dialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -44,6 +46,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -57,18 +60,19 @@ import androidx.webkit.WebViewFeature;
 import java.io.IOException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Locale;
 
 public class FragmentOptionsPrivacy extends FragmentBase implements SharedPreferences.OnSharedPreferenceChangeListener {
+    private View view;
+    private ImageButton ibHelp;
     private SwitchCompat swConfirmLinks;
     private SwitchCompat swCheckLinksDbl;
-    private SwitchCompat swBrowseLinks;
     private SwitchCompat swConfirmImages;
     private SwitchCompat swAskImages;
     private SwitchCompat swHtmlImages;
     private SwitchCompat swConfirmHtml;
     private SwitchCompat swAskHtml;
     private SwitchCompat swDisableTracking;
-    private SwitchCompat swHideTimeZone;
     private Button btnPin;
     private Button btnBiometrics;
     private Spinner spBiometricsTimeout;
@@ -78,6 +82,7 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
     private SwitchCompat swClientId;
     private TextView tvClientId;
     private ImageButton ibClientId;
+    private SwitchCompat swHideTimeZone;
     private SwitchCompat swDisplayHidden;
     private SwitchCompat swIncognitoKeyboard;
     private ImageButton ibIncognitoKeyboard;
@@ -93,17 +98,24 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
     private SwitchCompat swDisconnectAutoUpdate;
     private SwitchCompat swDisconnectLinks;
     private SwitchCompat swDisconnectImages;
+    private SwitchCompat swMnemonic;
+    private Button btnClearAll;
+    private TextView tvMnemonic;
 
     private Group grpSafeBrowsing;
 
+    private final static int BIP39_WORDS = 6;
+
     private final static String[] RESET_OPTIONS = new String[]{
-            "confirm_links", "check_links_dbl", "browse_links",
+            "confirm_links", "check_links_dbl",
             "confirm_images", "ask_images", "html_always_images", "confirm_html", "ask_html",
-            "disable_tracking", "hide_timezone",
+            "disable_tracking",
             "pin", "biometrics", "biometrics_timeout", "autolock", "autolock_nav",
-            "client_id", "display_hidden", "incognito_keyboard", "secure",
+            "client_id", "hide_timezone",
+            "display_hidden", "incognito_keyboard", "secure",
             "generic_ua", "safe_browsing", "load_emoji",
-            "disconnect_auto_update", "disconnect_links", "disconnect_images"
+            "disconnect_auto_update", "disconnect_links", "disconnect_images",
+            "wipe_mnemonic"
     };
 
     @Override
@@ -112,20 +124,19 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
         setSubtitle(R.string.title_setup);
         setHasOptionsMenu(true);
 
-        View view = inflater.inflate(R.layout.fragment_options_privacy, container, false);
+        view = inflater.inflate(R.layout.fragment_options_privacy, container, false);
 
         // Get controls
 
+        ibHelp = view.findViewById(R.id.ibHelp);
         swConfirmLinks = view.findViewById(R.id.swConfirmLinks);
         swCheckLinksDbl = view.findViewById(R.id.swCheckLinksDbl);
-        swBrowseLinks = view.findViewById(R.id.swBrowseLinks);
         swConfirmImages = view.findViewById(R.id.swConfirmImages);
         swAskImages = view.findViewById(R.id.swAskImages);
         swHtmlImages = view.findViewById(R.id.swHtmlImages);
         swConfirmHtml = view.findViewById(R.id.swConfirmHtml);
         swAskHtml = view.findViewById(R.id.swAskHtml);
         swDisableTracking = view.findViewById(R.id.swDisableTracking);
-        swHideTimeZone = view.findViewById(R.id.swHideTimeZone);
         btnPin = view.findViewById(R.id.btnPin);
         btnBiometrics = view.findViewById(R.id.btnBiometrics);
         spBiometricsTimeout = view.findViewById(R.id.spBiometricsTimeout);
@@ -135,6 +146,7 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
         swClientId = view.findViewById(R.id.swClientId);
         tvClientId = view.findViewById(R.id.tvClientId);
         ibClientId = view.findViewById(R.id.ibClientId);
+        swHideTimeZone = view.findViewById(R.id.swHideTimeZone);
         swDisplayHidden = view.findViewById(R.id.swDisplayHidden);
         swIncognitoKeyboard = view.findViewById(R.id.swIncognitoKeyboard);
         ibIncognitoKeyboard = view.findViewById(R.id.ibIncognitoKeyboard);
@@ -150,6 +162,9 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
         swDisconnectAutoUpdate = view.findViewById(R.id.swDisconnectAutoUpdate);
         swDisconnectLinks = view.findViewById(R.id.swDisconnectLinks);
         swDisconnectImages = view.findViewById(R.id.swDisconnectImages);
+        swMnemonic = view.findViewById(R.id.swMnemonic);
+        btnClearAll = view.findViewById(R.id.btnClearAll);
+        tvMnemonic = view.findViewById(R.id.tvMnemonic);
 
         grpSafeBrowsing = view.findViewById(R.id.grpSafeBrowsing);
 
@@ -159,12 +174,24 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
 
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
 
+        ibHelp.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Helper.view(v.getContext(), Helper.getSupportUri(v.getContext(), "Options:privacy"), false);
+            }
+        });
+
         swConfirmLinks.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
-                prefs.edit().putBoolean("confirm_links", checked).apply();
+                SharedPreferences.Editor editor = prefs.edit();
+                editor.putBoolean("confirm_links", checked);
+                if (!checked)
+                    for (String key : prefs.getAll().keySet())
+                        if (key.endsWith(".confirm_link"))
+                            editor.remove(key);
+                editor.apply();
                 swCheckLinksDbl.setEnabled(checked);
-                swBrowseLinks.setEnabled(!checked);
             }
         });
 
@@ -172,13 +199,6 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
                 prefs.edit().putBoolean("check_links_dbl", checked).apply();
-            }
-        });
-
-        swBrowseLinks.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
-                prefs.edit().putBoolean("browse_links", checked).apply();
             }
         });
 
@@ -193,7 +213,13 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
         swAskImages.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
-                prefs.edit().putBoolean("ask_images", checked).apply();
+                SharedPreferences.Editor editor = prefs.edit();
+                editor.putBoolean("ask_images", checked);
+                if (!checked)
+                    for (String key : prefs.getAll().keySet())
+                        if (key.endsWith(".show_images"))
+                            editor.remove(key);
+                editor.apply();
             }
         });
 
@@ -215,7 +241,13 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
         swAskHtml.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
-                prefs.edit().putBoolean("ask_html", checked).apply();
+                SharedPreferences.Editor editor = prefs.edit();
+                editor.putBoolean("ask_html", checked);
+                if (!checked)
+                    for (String key : prefs.getAll().keySet())
+                        if (key.endsWith(".show_full"))
+                            editor.remove(key);
+                editor.apply();
             }
         });
 
@@ -223,13 +255,6 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
                 prefs.edit().putBoolean("disable_tracking", checked).apply();
-            }
-        });
-
-        swHideTimeZone.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
-                prefs.edit().putBoolean("hide_timezone", checked).apply();
             }
         });
 
@@ -246,29 +271,30 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
             public void onClick(View v) {
                 final boolean biometrics = prefs.getBoolean("biometrics", false);
 
-                Helper.authenticate(getActivity(), getViewLifecycleOwner(), biometrics, new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            boolean pro = ActivityBilling.isPro(getContext());
-                            if (pro) {
-                                SharedPreferences.Editor editor = prefs.edit();
-                                if (!biometrics)
-                                    editor.remove("pin");
-                                editor.putBoolean("biometrics", !biometrics);
-                                editor.apply();
-                            } else
-                                startActivity(new Intent(getContext(), ActivityBilling.class));
-                        } catch (Throwable ex) {
-                            Log.w(ex);
-                        }
-                    }
-                }, new Runnable() {
-                    @Override
-                    public void run() {
-                        // Do nothing
-                    }
-                });
+                Helper.authenticate(getActivity(), getViewLifecycleOwner(), biometrics,
+                        new RunnableEx("auth:setup") {
+                            @Override
+                            public void delegate() {
+                                try {
+                                    boolean pro = ActivityBilling.isPro(getContext());
+                                    if (pro) {
+                                        SharedPreferences.Editor editor = prefs.edit();
+                                        if (!biometrics)
+                                            editor.remove("pin");
+                                        editor.putBoolean("biometrics", !biometrics);
+                                        editor.apply();
+                                    } else
+                                        startActivity(new Intent(getContext(), ActivityBilling.class));
+                                } catch (Throwable ex) {
+                                    Log.w(ex);
+                                }
+                            }
+                        }, new RunnableEx("auth:nothing") {
+                            @Override
+                            public void delegate() {
+                                // Do nothing
+                            }
+                        });
             }
         });
 
@@ -313,6 +339,13 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
             @Override
             public void onClick(View v) {
                 Helper.view(v.getContext(), Uri.parse(Helper.ID_COMMAND_URI), true);
+            }
+        });
+
+        swHideTimeZone.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
+                prefs.edit().putBoolean("hide_timezone", checked).apply();
             }
         });
 
@@ -366,7 +399,7 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
             }
         });
 
-        grpSafeBrowsing.setEnabled(WebViewEx.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE));
+        grpSafeBrowsing.setEnabled(WebViewEx.isFeatureSupported(getContext(), WebViewFeature.SAFE_BROWSING_ENABLE));
 
         swLoadEmoji.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
@@ -437,9 +470,51 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
             }
         });
 
+        btnClearAll.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(ActivityClear.getIntent(v.getContext()));
+            }
+        });
+
+        swMnemonic.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
+                if (checked) {
+                    Context context = compoundButton.getContext();
+                    String mnemonic = BIP39.getMnemonic(Locale.getDefault(), BIP39_WORDS, context);
+
+                    prefs.edit().putString("wipe_mnemonic", mnemonic).apply();
+                    tvMnemonic.setText(mnemonic);
+
+                    ClipboardManager cbm = Helper.getSystemService(context, ClipboardManager.class);
+                    if (cbm == null)
+                        return;
+
+                    ClipData clip = ClipData.newPlainText(getString(R.string.app_name), mnemonic);
+                    cbm.setPrimaryClip(clip);
+
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU)
+                        ToastEx.makeText(context, R.string.title_clipboard_copied, Toast.LENGTH_LONG).show();
+
+                } else {
+                    prefs.edit().remove("wipe_mnemonic").apply();
+                    tvMnemonic.setText(null);
+                }
+            }
+        });
+
         // Initialize
         FragmentDialogTheme.setBackground(getContext(), view, false);
-        tvClientId.setText(getString(R.string.app_name) + " " + BuildConfig.VERSION_NAME);
+
+        StringBuilder sb = new StringBuilder();
+        for (String value : EmailService.getId(getContext()).values()) {
+            if (sb.length() > 0)
+                sb.append(' ');
+            sb.append(value);
+        }
+        tvClientId.setText(sb);
+        swDisconnectImages.setVisibility(BuildConfig.DEBUG ? View.VISIBLE : View.GONE);
 
         PreferenceManager.getDefaultSharedPreferences(getContext()).registerOnSharedPreferenceChangeListener(this);
 
@@ -454,8 +529,7 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
 
     @Override
     public void onSharedPreferenceChanged(SharedPreferences prefs, String key) {
-        if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
-            setOptions();
+        setOptions();
     }
 
     @Override
@@ -474,13 +548,14 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
     }
 
     private void setOptions() {
+        if (view == null || getContext() == null)
+            return;
+
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
 
         swConfirmLinks.setChecked(prefs.getBoolean("confirm_links", true));
         swCheckLinksDbl.setChecked(prefs.getBoolean("check_links_dbl", BuildConfig.PLAY_STORE_RELEASE));
         swCheckLinksDbl.setEnabled(swConfirmLinks.isChecked());
-        swBrowseLinks.setChecked(prefs.getBoolean("browse_links", false));
-        swBrowseLinks.setEnabled(!swConfirmLinks.isChecked());
         swConfirmImages.setChecked(prefs.getBoolean("confirm_images", true));
         swAskImages.setChecked(prefs.getBoolean("ask_images", true));
         swAskImages.setEnabled(swConfirmImages.isChecked());
@@ -489,7 +564,6 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
         swAskHtml.setChecked(prefs.getBoolean("ask_html", true));
         swAskHtml.setEnabled(swConfirmHtml.isChecked());
         swDisableTracking.setChecked(prefs.getBoolean("disable_tracking", true));
-        swHideTimeZone.setChecked(prefs.getBoolean("hide_timezone", true));
 
         String pin = prefs.getString("pin", null);
         btnPin.setCompoundDrawablesRelativeWithIntrinsicBounds(
@@ -513,6 +587,7 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
         swAutoLockNav.setChecked(prefs.getBoolean("autolock_nav", false));
 
         swClientId.setChecked(prefs.getBoolean("client_id", true));
+        swHideTimeZone.setChecked(prefs.getBoolean("hide_timezone", true));
         swDisplayHidden.setChecked(prefs.getBoolean("display_hidden", false));
         swIncognitoKeyboard.setChecked(prefs.getBoolean("incognito_keyboard", false));
         swSecure.setChecked(prefs.getBoolean("secure", false));
@@ -530,6 +605,10 @@ public class FragmentOptionsPrivacy extends FragmentBase implements SharedPrefer
         swDisconnectAutoUpdate.setChecked(prefs.getBoolean("disconnect_auto_update", false));
         swDisconnectLinks.setChecked(prefs.getBoolean("disconnect_links", true));
         swDisconnectImages.setChecked(prefs.getBoolean("disconnect_images", false));
+
+        String mnemonic = prefs.getString("wipe_mnemonic", null);
+        swMnemonic.setChecked(mnemonic != null);
+        tvMnemonic.setText(mnemonic);
     }
 
     public static class FragmentDialogPin extends FragmentDialogBase {

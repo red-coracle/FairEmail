@@ -72,7 +72,7 @@ public class FragmentDialogFolder extends FragmentDialogBase {
 
         final Context context = getContext();
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        final InputMethodManager imm = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
+        final InputMethodManager imm = Helper.getSystemService(context, InputMethodManager.class);
 
         List<String> selected_folders = new ArrayList<>();
         String json = prefs.getString("selected_folders", "[]");
@@ -148,6 +148,7 @@ public class FragmentDialogFolder extends FragmentDialogBase {
 
                 Bundle args = getArguments();
                 args.putLong("folder", folder.id);
+                args.putString("type", folder.type);
 
                 sendResult(RESULT_OK);
                 dismiss();
@@ -335,7 +336,7 @@ public class FragmentDialogFolder extends FragmentDialogBase {
         }.execute(this, args, "folder:select");
 
         return new AlertDialog.Builder(context)
-                .setIcon(R.drawable.twotone_drive_file_move_24)
+                .setIcon(R.drawable.twotone_folder_open_24)
                 .setTitle(title)
                 .setView(dview)
                 .setNegativeButton(android.R.string.cancel, null)

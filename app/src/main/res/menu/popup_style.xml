@@ -8,6 +8,10 @@
         <menu>
             <group android:id="@+id/group_style_size">
                 <item
+                    android:id="@+id/menu_style_size_xsmall"
+                    android:title="@string/title_style_size_xsmall" />
+
+                <item
                     android:id="@+id/menu_style_size_small"
                     android:title="@string/title_style_size_small" />
 
@@ -18,6 +22,10 @@
                 <item
                     android:id="@+id/menu_style_size_large"
                     android:title="@string/title_style_size_large" />
+
+                <item
+                    android:id="@+id/menu_style_size_xlarge"
+                    android:title="@string/title_style_size_xlarge" />
             </group>
         </menu>
     </item>
@@ -134,8 +142,17 @@
     </item>
 
     <group
-        android:id="@+id/group_style_strikethrough"
+        android:id="@+id/group_style_mark"
         android:orderInCategory="9">
+        <item
+            android:id="@+id/menu_style_mark"
+            android:icon="@drawable/twotone_border_color_24"
+            android:title="@string/title_style_mark" />
+    </group>
+
+    <group
+        android:id="@+id/group_style_strikethrough"
+        android:orderInCategory="10">
         <item
             android:id="@+id/menu_style_strikethrough"
             android:icon="@drawable/twotone_format_strikethrough_24"
@@ -143,17 +160,26 @@
     </group>
 
     <group
+        android:id="@+id/group_style_parenthesis"
+        android:orderInCategory="11">
+        <item
+            android:id="@+id/menu_style_parenthesis"
+            android:icon="@drawable/twotone_data_object_24"
+            android:title="@string/title_style_parenthesis" />
+    </group>
+
+    <group
         android:id="@+id/group_style_code"
-        android:orderInCategory="10">
+        android:orderInCategory="11">
         <item
             android:id="@+id/menu_style_code"
-            android:icon="@drawable/baseline_code_24"
+            android:icon="@drawable/twotone_code_24"
             android:title="@string/title_style_code" />
     </group>
 
     <group
         android:id="@+id/group_style_clear"
-        android:orderInCategory="11">
+        android:orderInCategory="12">
         <item
             android:id="@+id/menu_style_clear"
             android:icon="@drawable/twotone_format_clear_24"

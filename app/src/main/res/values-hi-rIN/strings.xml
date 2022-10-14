@@ -9,7 +9,8 @@
     <string name="app_exit">बाहर निकलने के लिए फिर से \'वापस\' पर क्लिक करें।</string>
     <string name="app_cake">नाकाफी स्टोरेज 	जगह</string>
     <string name="app_updated">अंतिम अपडेट: %1$s</string>
-    <string name="channel_service">प्राप्त करें</string>
+    <string name="app_download">%1$s से डाउनलोड किया गया है</string>
+    <string name="channel_service">निगरानी</string>
     <string name="channel_send">भेजें</string>
     <string name="channel_notification">ईमेल</string>
     <string name="channel_progress">प्रगति</string>
@@ -97,6 +98,7 @@
     </string>
     <string name="title_advanced_cleanup">Depending on the Android version, tethering may work or may not work. Tethered traffic cannot be filtered.</string>
     <string name="title_synchronize_enabled">तुल्यकालित करें</string>
+    <string name="title_contact_email">ईमेल</string>
     <string name="title_inbox_root_hint">        Some providers require new folders to be created below the inbox.        In this case, you can long press the inbox in the folder list and select \'Create sub folder\'.
     </string>
     <string name="title_months_all">सभी</string>
@@ -142,4 +144,17 @@
     <!-- https://www.bouncycastle.org/specifications.html -->
     <!-- https://datatracker.ietf.org/doc/html/rfc5751#page-29 -->
     <!-- https://datatracker.ietf.org/doc/html/rfc5751#section-2.7 -->
+    <string-array name="contactTypes">
+        <item>Recipient</item>
+        <item>Sender</item>
+        <item>अवरोधित</item>
+        <item>Not blocked</item>
+    </string-array>
+    <string-array name="contactGroupTypes">
+        <item>Any</item>
+        <item>Home</item>
+        <item>Work</item>
+        <item>अन्य</item>
+        <item>Mobile</item>
+    </string-array>
 </resources>

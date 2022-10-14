@@ -51,7 +51,8 @@ public class WorkerCleanup extends Worker {
     private static final int CLEANUP_INTERVAL = 4; // hours
     private static final long KEEP_FILES_DURATION = 3600 * 1000L; // milliseconds
     private static final long KEEP_IMAGES_DURATION = 3 * 24 * 3600 * 1000L; // milliseconds
-    private static final long KEEP_CONTACTS_DURATION = 180 * 24 * 3600 * 1000L; // milliseconds
+    private static final long KEEP_CONTACTS_DURATION = 365 * 24 * 3600 * 1000L; // milliseconds
+    private static final int KEEP_CONTACTS_COUNT = 10000;
 
     private static Semaphore semaphore = new Semaphore(1);
 
@@ -83,7 +84,7 @@ public class WorkerCleanup extends Worker {
 
         long now = new Date().getTime();
         long last_cleanup = prefs.getLong("last_cleanup", 0);
-        if (last_cleanup + CLEANUP_INTERVAL * 3600 * 1000L > now) {
+        if (last_cleanup + 2 * CLEANUP_INTERVAL * 3600 * 1000L > now) {
             Log.i("Skip cleanup last=" + new Date(last_cleanup));
             return;
         }
@@ -97,6 +98,7 @@ public class WorkerCleanup extends Worker {
         boolean cleanup_attachments = prefs.getBoolean("cleanup_attachments", false);
         boolean download_headers = prefs.getBoolean("download_headers", false);
         boolean download_eml = prefs.getBoolean("download_eml", false);
+        boolean sqlite_analyze = prefs.getBoolean("sqlite_analyze", true);
 
         long start = new Date().getTime();
         DB db = DB.getInstance(context);
@@ -152,8 +154,12 @@ public class WorkerCleanup extends Worker {
                 }
 
                 // Restore alarms
-                for (EntityMessage message : db.message().getSnoozed(null))
-                    EntityMessage.snooze(context, message.id, message.ui_snoozed);
+                try {
+                    for (EntityMessage message : db.message().getSnoozed(null))
+                        EntityMessage.snooze(context, message.id, message.ui_snoozed);
+                } catch (IllegalArgumentException ex) {
+                    Log.w(ex);
+                }
 
                 ServiceSynchronize.reschedule(context);
 
@@ -163,7 +169,7 @@ public class WorkerCleanup extends Worker {
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     Log.i("Checking notification channels");
-                    NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+                    NotificationManager nm = Helper.getSystemService(context, NotificationManager.class);
                     for (NotificationChannel channel : nm.getNotificationChannels()) {
                         String cid = channel.getId();
                         Log.i("Notification channel id=" + cid + " name=" + channel.getName());
@@ -205,8 +211,8 @@ public class WorkerCleanup extends Worker {
             File[] revision = new File(context.getFilesDir(), "revision").listFiles();
             File[] references = new File(context.getFilesDir(), "references").listFiles();
             File[] encryption = new File(context.getFilesDir(), "encryption").listFiles();
-            File[] photos = new File(context.getCacheDir(), "photo").listFiles();
-            File[] calendars = new File(context.getCacheDir(), "calendar").listFiles();
+            File[] photos = new File(context.getFilesDir(), "photo").listFiles();
+            File[] calendars = new File(context.getFilesDir(), "calendar").listFiles();
 
             if (messages != null)
                 files.addAll(Arrays.asList(messages));
@@ -224,19 +230,23 @@ public class WorkerCleanup extends Worker {
             // Cleanup message files
             Log.i("Cleanup message files");
             for (File file : files)
-                if (manual || file.lastModified() + KEEP_FILES_DURATION < now) {
-                    String name = file.getName().split("\\.")[0];
-                    int us = name.indexOf('_');
-                    if (us > 0)
-                        name = name.substring(0, us);
-                    long id = Long.parseLong(name);
-                    EntityMessage message = db.message().getMessage(id);
-                    if (message == null || !message.content) {
-                        Log.i("Deleting " + file);
-                        if (!file.delete())
-                            Log.w("Error deleting " + file);
+                if (manual || file.lastModified() + KEEP_FILES_DURATION < now)
+                    try {
+                        String name = file.getName().split("\\.")[0];
+                        int us = name.indexOf('_');
+                        if (us > 0)
+                            name = name.substring(0, us);
+                        long id = Long.parseLong(name);
+                        EntityMessage message = db.message().getMessage(id);
+                        if (message == null || !message.content) {
+                            Log.i("Deleting " + file);
+                            if (!file.delete())
+                                Log.w("Error deleting " + file);
+                        }
+                    } catch (NumberFormatException ex) {
+                        Log.e(file.getAbsolutePath(), ex);
+                        file.delete();
                     }
-                }
 
             // Cleanup raw message files
             if (!download_eml) {
@@ -244,22 +254,26 @@ public class WorkerCleanup extends Worker {
                 File[] raws = new File(context.getFilesDir(), "raw").listFiles();
                 if (raws != null)
                     for (File file : raws)
-                        if (manual || file.lastModified() + KEEP_FILES_DURATION < now) {
-                            long id = Long.parseLong(file.getName().split("\\.")[0]);
-                            EntityMessage message = db.message().getMessage(id);
-                            if (manual && cleanup_attachments && message != null) {
-                                EntityAccount account = db.account().getAccount(message.account);
-                                if (account != null && account.protocol == EntityAccount.TYPE_IMAP) {
-                                    message.raw = false;
-                                    db.message().setMessageRaw(message.id, message.raw);
+                        if (manual || file.lastModified() + KEEP_FILES_DURATION < now)
+                            try {
+                                long id = Long.parseLong(file.getName().split("\\.")[0]);
+                                EntityMessage message = db.message().getMessage(id);
+                                if (manual && cleanup_attachments && message != null) {
+                                    EntityAccount account = db.account().getAccount(message.account);
+                                    if (account != null && account.protocol == EntityAccount.TYPE_IMAP) {
+                                        message.raw = false;
+                                        db.message().setMessageRaw(message.id, message.raw);
+                                    }
                                 }
+                                if (message == null || message.raw == null || !message.raw) {
+                                    Log.i("Deleting " + file);
+                                    if (!file.delete())
+                                        Log.w("Error deleting " + file);
+                                }
+                            } catch (NumberFormatException ex) {
+                                Log.e(file.getAbsolutePath(), ex);
+                                file.delete();
                             }
-                            if (message == null || message.raw == null || !message.raw) {
-                                Log.i("Deleting " + file);
-                                if (!file.delete())
-                                    Log.w("Error deleting " + file);
-                            }
-                        }
             }
 
             // Cleanup attachment files
@@ -267,34 +281,42 @@ public class WorkerCleanup extends Worker {
             File[] attachments = new File(context.getFilesDir(), "attachments").listFiles();
             if (attachments != null)
                 for (File file : attachments)
-                    if (manual || file.lastModified() + KEEP_FILES_DURATION < now) {
-                        long id = Long.parseLong(file.getName().split("\\.")[0]);
-                        EntityAttachment attachment = db.attachment().getAttachment(id);
-                        if (attachment == null || !attachment.available) {
-                            Log.i("Deleting " + file);
-                            if (!file.delete())
-                                Log.w("Error deleting " + file);
+                    if (manual || file.lastModified() + KEEP_FILES_DURATION < now)
+                        try {
+                            long id = Long.parseLong(file.getName().split("\\.")[0]);
+                            EntityAttachment attachment = db.attachment().getAttachment(id);
+                            if (attachment == null || !attachment.available) {
+                                Log.i("Deleting " + file);
+                                if (!file.delete())
+                                    Log.w("Error deleting " + file);
+                            }
+                        } catch (NumberFormatException ex) {
+                            Log.e(file.getAbsolutePath(), ex);
+                            file.delete();
                         }
-                    }
 
             // Cleanup cached images
             Log.i("Cleanup cached image files");
-            File[] images = new File(context.getCacheDir(), "images").listFiles();
+            File[] images = new File(context.getFilesDir(), "images").listFiles();
             if (images != null)
                 for (File file : images)
-                    if (manual || file.lastModified() + KEEP_FILES_DURATION < now) {
-                        long id = Long.parseLong(file.getName().split("[_\\.]")[0]);
-                        EntityMessage message = db.message().getMessage(id);
-                        if (manual || message == null ||
-                                file.lastModified() + KEEP_IMAGES_DURATION < now) {
-                            Log.i("Deleting " + file);
-                            if (!file.delete())
-                                Log.w("Error deleting " + file);
+                    if (manual || file.lastModified() + KEEP_FILES_DURATION < now)
+                        try {
+                            long id = Long.parseLong(file.getName().split("[_\\.]")[0]);
+                            EntityMessage message = db.message().getMessage(id);
+                            if (manual || message == null ||
+                                    file.lastModified() + KEEP_IMAGES_DURATION < now) {
+                                Log.i("Deleting " + file);
+                                if (!file.delete())
+                                    Log.w("Error deleting " + file);
+                            }
+                        } catch (NumberFormatException ex) {
+                            Log.e(file.getAbsolutePath(), ex);
+                            file.delete();
                         }
-                    }
 
             // Cleanup shared files
-            File[] shared = new File(context.getCacheDir(), "shared").listFiles();
+            File[] shared = new File(context.getFilesDir(), "shared").listFiles();
             if (shared != null)
                 for (File file : shared)
                     if (manual || file.lastModified() + KEEP_FILES_DURATION < now) {
@@ -332,16 +354,18 @@ public class WorkerCleanup extends Worker {
             Log.i("Cleanup contacts");
             try {
                 db.beginTransaction();
-                int contacts = db.contact().deleteContacts(now - KEEP_CONTACTS_DURATION);
+                int contacts = db.contact().countContacts();
+                int deleted = (contacts < KEEP_CONTACTS_COUNT ? 0 :
+                        db.contact().deleteContacts(now - KEEP_CONTACTS_DURATION));
                 db.setTransactionSuccessful();
-                Log.i("Deleted contacts=" + contacts);
+                Log.i("Contacts=" + contacts + " deleted=" + deleted);
             } finally {
                 db.endTransaction();
             }
 
-            if (BuildConfig.DEBUG) {
+            if (sqlite_analyze) {
                 // https://sqlite.org/lang_analyze.html
-                Log.i("Analyze");
+                Log.i("Running analyze");
                 long analyze = new Date().getTime();
                 try (Cursor cursor = db.getOpenHelper().getWritableDatabase().query("PRAGMA analysis_limit=1000; PRAGMA optimize;")) {
                     cursor.moveToNext();

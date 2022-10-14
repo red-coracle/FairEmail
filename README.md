@@ -25,6 +25,12 @@ FairEmail might be for you if you value your privacy.
 
 *FairEmail does not support non-standard protocols, like Microsoft Exchange Web Services and Microsoft ActiveSync.*
 
+<br>
+
+**FairEmail has been restored to the Play Store with help from Google's privacy and policy department. Please [see here](https://faircode.eu/faq.html) for what happened.**
+
+<br>
+
 ## Main features
 
 * Fully featured
@@ -94,7 +100,7 @@ All pro features are convenience or advanced features.
 * Snooze messages ([instructions](https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq67))
 * Send messages after selected time
 * Synchronization scheduling ([instructions](https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq78))
-* Reply templates
+* Reply templates ([instructions](https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq179))
 * Accept/decline calendar invitations
 * Add message to calendar
 * Filter rules ([instructions](https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq71))
@@ -116,7 +122,7 @@ Supported download locations:
 * [GitHub](https://github.com/M66B/FairEmail/releases)
 * [Play store](https://play.google.com/store/apps/details?id=eu.faircode.email)
 * [Play store](https://play.google.com/apps/testing/eu.faircode.email) (test)
-* [F-Droid](https://f-droid.org/en/packages/eu.faircode.email/) ([last build status](https://f-droid.org/wiki/page/eu.faircode.email/lastbuild)) (the F-Droid app can be downloaded [here](https://f-droid.org/))
+* [F-Droid](https://f-droid.org/en/packages/eu.faircode.email/) (the F-Droid app can be downloaded [here](https://f-droid.org/))
 * ~~[AppGallery](https://wap3.hispace.hicloud.com/uowap/index.jsp#/detailApp/C101678151) (the AppGallery app can be downloaded [here](https://huaweimobileservices.com/appgallery/))~~
 * ~~[Amazon](https://www.amazon.com/gp/product/B0983R6MH2)~~ (the APK file repackaged by Amazon is incomplete! An issue report was never answered by Amazon.)
 
@@ -223,7 +229,7 @@ Error reporting is disabled by default, see also [the privacy policy](https://gi
 
 ## License
 
-Copyright &copy; 2018-2021 Marcel Bokhorst. All rights reserved.
+Copyright &copy; 2018-2022 Marcel Bokhorst. All rights reserved.
 
 [GNU General Public License version 3](https://www.gnu.org/licenses/gpl.txt)
 

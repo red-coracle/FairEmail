@@ -23,12 +23,16 @@ import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
 import static androidx.browser.customtabs.CustomTabsService.ACTION_CUSTOM_TABS_CONNECTION;
 
 import android.Manifest;
+import android.animation.Animator;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.ActivityManager;
+import android.app.ApplicationExitInfo;
 import android.app.KeyguardManager;
+import android.app.NotificationManager;
 import android.app.UiModeManager;
+import android.app.usage.UsageEvents;
 import android.app.usage.UsageStatsManager;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
@@ -37,6 +41,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -53,6 +58,8 @@ import android.os.LocaleList;
 import android.os.Parcel;
 import android.os.PowerManager;
 import android.os.StatFs;
+import android.os.storage.StorageManager;
+import android.provider.Browser;
 import android.provider.Settings;
 import android.security.KeyChain;
 import android.security.KeyChainAliasCallback;
@@ -74,7 +81,6 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
-import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -97,10 +103,11 @@ import androidx.biometric.BiometricPrompt;
 import androidx.browser.customtabs.CustomTabColorSchemeParams;
 import androidx.browser.customtabs.CustomTabsClient;
 import androidx.browser.customtabs.CustomTabsIntent;
-import androidx.browser.customtabs.CustomTabsServiceConnection;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.lifecycle.Lifecycle;
@@ -108,31 +115,33 @@ import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.OnLifecycleEvent;
 import androidx.preference.PreferenceManager;
+import androidx.recyclerview.selection.SelectionTracker;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager.widget.PagerAdapter;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.snackbar.Snackbar;
 
 import org.openintents.openpgp.util.OpenPgpApi;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.DateFormat;
 import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -157,6 +166,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
 public class Helper {
+    private static Integer targetSdk = null;
     private static Boolean hasWebView = null;
     private static Boolean hasPlayStore = null;
     private static Boolean hasValidFingerprint = null;
@@ -165,21 +175,25 @@ public class Helper {
 
     static final int BUFFER_SIZE = 8192; // Same as in Files class
     static final long MIN_REQUIRED_SPACE = 250 * 1024L * 1024L;
-    static final int MAX_REDIRECTS = 5; // https://www.freesoft.org/CIE/RFC/1945/46.htm
-    static final int AUTOLOCK_GRACE = 7; // seconds
+    static final int AUTOLOCK_GRACE = 15; // seconds
     static final long PIN_FAILURE_DELAY = 3; // seconds
 
+    static final String PGP_OPENKEYCHAIN_PACKAGE = "org.sufficientlysecure.keychain";
     static final String PGP_BEGIN_MESSAGE = "-----BEGIN PGP MESSAGE-----";
     static final String PGP_END_MESSAGE = "-----END PGP MESSAGE-----";
 
-    static final String PRIVACY_URI = "https://email.faircode.eu/privacy/";
+    static final String PACKAGE_CHROME = "com.android.chrome";
+    static final String PACKAGE_WEBVIEW = "https://play.google.com/store/apps/details?id=com.google.android.webview";
+    static final String PRIVACY_URI = "https://github.com/M66B/FairEmail/blob/master/PRIVACY.md";
+    static final String TUTORIALS_URI = "https://github.com/M66B/FairEmail/tree/master/tutorials#main";
     static final String XDA_URI = "https://forum.xda-developers.com/showthread.php?t=3824168";
     static final String SUPPORT_URI = "https://contact.faircode.eu/";
     static final String TEST_URI = "https://play.google.com/apps/testing/" + BuildConfig.APPLICATION_ID;
     static final String BIMI_PRIVACY_URI = "https://datatracker.ietf.org/doc/html/draft-brotman-ietf-bimi-guidance-03#section-7.4";
+    static final String LT_PRIVACY_URI = "https://languagetool.org/legal/privacy";
     static final String ID_COMMAND_URI = "https://datatracker.ietf.org/doc/html/rfc2971#section-3.1";
+    static final String AUTH_RESULTS_URI = "https://datatracker.ietf.org/doc/html/rfc7601";
     static final String FAVICON_PRIVACY_URI = "https://en.wikipedia.org/wiki/Favicon";
-    static final String GRAVATAR_PRIVACY_URI = "https://en.wikipedia.org/wiki/Gravatar";
     static final String LICENSE_URI = "https://www.gnu.org/licenses/gpl-3.0.html";
     static final String DONTKILL_URI = "https://dontkillmyapp.com/";
     static final String URI_SUPPORT_RESET_OPEN = "https://support.google.com/pixelphone/answer/6271667";
@@ -194,7 +208,7 @@ public class Helper {
     private static final String[] ROMAN_1 = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"};
 
     static final Pattern EMAIL_ADDRESS = Pattern.compile(
-            "[\\S]{1,256}" +
+            "[\\S&&[^\"@]]{1,256}" +
                     "\\@" +
                     "[\\p{L}0-9][\\p{L}0-9\\-\\_]{0,64}" +
                     "(" +
@@ -382,6 +396,14 @@ public class Helper {
         return true;
     }
 
+    static String[] getDesiredPermissions(Context context) {
+        List<String> permissions = new ArrayList<>();
+        permissions.add(Manifest.permission.READ_CONTACTS);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS);
+        return permissions.toArray(new String[0]);
+    }
+
     static String[] getOAuthPermissions() {
         List<String> permissions = new ArrayList<>();
         //permissions.add(Manifest.permission.READ_CONTACTS); // profile
@@ -390,19 +412,18 @@ public class Helper {
         return permissions.toArray(new String[0]);
     }
 
-    static boolean hasCustomTabs(Context context, Uri uri) {
-        String scheme = (uri == null ? null : uri.getScheme());
-        if (!"http".equals(scheme) && !"https".equals(scheme))
-            return false;
-
+    private static boolean hasCustomTabs(Context context, Uri uri, String pkg) {
         PackageManager pm = context.getPackageManager();
         Intent view = new Intent(Intent.ACTION_VIEW, uri);
 
-        List<ResolveInfo> ris = pm.queryIntentActivities(view, 0); // action whitelisted
+        int flags = (Build.VERSION.SDK_INT < Build.VERSION_CODES.M ? 0 : PackageManager.MATCH_ALL);
+        List<ResolveInfo> ris = pm.queryIntentActivities(view, flags); // action whitelisted
         for (ResolveInfo info : ris) {
             Intent intent = new Intent();
             intent.setAction(ACTION_CUSTOM_TABS_CONNECTION);
             intent.setPackage(info.activityInfo.packageName);
+            if (pkg != null && !pkg.equals(info.activityInfo.packageName))
+                continue;
             if (pm.resolveService(intent, 0) != null)
                 return true;
         }
@@ -420,7 +441,8 @@ public class Helper {
         try {
             PackageManager pm = context.getPackageManager();
             if (pm.hasSystemFeature(PackageManager.FEATURE_WEBVIEW)) {
-                new WebView(context);
+                WebView view = new WebView(context);
+                view.setOverScrollMode(View.OVER_SCROLL_NEVER);
                 return true;
             } else
                 return false;
@@ -432,6 +454,25 @@ public class Helper {
                     at eu.faircode.email.ApplicationEx.onCreate(SourceFile:110)
                     at android.app.Instrumentation.callApplicationOnCreate(Instrumentation.java:1014)
                     at android.app.ActivityThread.handleBindApplication(ActivityThread.java:4751)
+
+                    Chromium WebView package does not exist
+                    android.webkit.WebViewFactory$MissingWebViewPackageException: Failed to load WebView provider: No WebView installed
+                        at android.webkit.WebViewFactory.getWebViewContextAndSetProvider(WebViewFactory.java:428)
+                        at android.webkit.WebViewFactory.getProviderClass(WebViewFactory.java:493)
+                        at android.webkit.WebViewFactory.getProvider(WebViewFactory.java:348)
+                        at android.webkit.WebView.getFactory(WebView.java:2594)
+                        at android.webkit.WebView.ensureProviderCreated(WebView.java:2588)
+                        at android.webkit.WebView.setOverScrollMode(WebView.java:2656)
+                        at android.view.View.<init>(View.java:5325)
+                        at android.view.View.<init>(View.java:5466)
+                        at android.view.ViewGroup.<init>(ViewGroup.java:702)
+                        at android.widget.AbsoluteLayout.<init>(AbsoluteLayout.java:56)
+                        at android.webkit.WebView.<init>(WebView.java:421)
+                        at android.webkit.WebView.<init>(WebView.java:363)
+                        at android.webkit.WebView.<init>(WebView.java:345)
+                        at android.webkit.WebView.<init>(WebView.java:332)
+                        at android.webkit.WebView.<init>(WebView.java:322)
+                        at eu.faircode.email.WebViewEx.<init>(SourceFile:1)
              */
             return false;
         }
@@ -448,27 +489,22 @@ public class Helper {
     }
 
     static Boolean isIgnoringOptimizations(Context context) {
+        if (isArc())
+            return true;
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M)
             return null;
 
-        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        PowerManager pm = Helper.getSystemService(context, PowerManager.class);
         if (pm == null)
             return null;
 
         return pm.isIgnoringBatteryOptimizations(BuildConfig.APPLICATION_ID);
     }
 
-    static boolean isOptimizing12(Context context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || true)
-            return false;
-
-        Boolean ignoring = Helper.isIgnoringOptimizations(context);
-        return (ignoring != null && !ignoring);
-    }
-
     static Integer getBatteryLevel(Context context) {
         try {
-            BatteryManager bm = (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
+            BatteryManager bm = Helper.getSystemService(context, BatteryManager.class);
             if (bm == null)
                 return null;
             return bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
@@ -482,7 +518,7 @@ public class Helper {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M)
             return false;
         try {
-            BatteryManager bm = (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
+            BatteryManager bm = Helper.getSystemService(context, BatteryManager.class);
             if (bm == null)
                 return false;
             return bm.isCharging();
@@ -523,7 +559,7 @@ public class Helper {
                 int enabled = Settings.System.getInt(resolver, Settings.Secure.LOCK_PATTERN_ENABLED, 0);
                 return (enabled != 0);
             } else {
-                KeyguardManager kgm = (KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE);
+                KeyguardManager kgm = Helper.getSystemService(context, KeyguardManager.class);
                 return (kgm != null && kgm.isDeviceSecure());
             }
         } catch (Throwable ex) {
@@ -534,7 +570,7 @@ public class Helper {
 
     static String getOpenKeychainPackage(Context context) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        return prefs.getString("openpgp_provider", "org.sufficientlysecure.keychain");
+        return prefs.getString("openpgp_provider", Helper.PGP_OPENKEYCHAIN_PACKAGE);
     }
 
     static boolean isOpenKeychainInstalled(Context context) {
@@ -594,8 +630,7 @@ public class Helper {
 
     static boolean isAccessibilityEnabled(Context context) {
         try {
-            AccessibilityManager am =
-                    (AccessibilityManager) context.getSystemService(Context.ACCESSIBILITY_SERVICE);
+            AccessibilityManager am = Helper.getSystemService(context, AccessibilityManager.class);
             return (am != null && am.isEnabled());
         } catch (Throwable ex) {
             Log.e(ex);
@@ -622,6 +657,99 @@ public class Helper {
         }
     }
 
+    static String getEventType(int type) {
+        switch (type) {
+            case UsageEvents.Event.ACTIVITY_PAUSED:
+                return "Activity/paused";
+            case UsageEvents.Event.ACTIVITY_RESUMED:
+                return "Activity/resumed";
+            case UsageEvents.Event.ACTIVITY_STOPPED:
+                return "Activity/stopped";
+            case UsageEvents.Event.CONFIGURATION_CHANGE:
+                return "Configuration/change";
+            case UsageEvents.Event.DEVICE_SHUTDOWN:
+                return "Device/shutdown";
+            case UsageEvents.Event.DEVICE_STARTUP:
+                return "Device/startup";
+            case UsageEvents.Event.FOREGROUND_SERVICE_START:
+                return "Foreground/start";
+            case UsageEvents.Event.FOREGROUND_SERVICE_STOP:
+                return "Foreground/stop";
+            case UsageEvents.Event.KEYGUARD_HIDDEN:
+                return "Keyguard/hidden";
+            case UsageEvents.Event.KEYGUARD_SHOWN:
+                return "Keyguard/shown";
+            case UsageEvents.Event.SCREEN_INTERACTIVE:
+                return "Screen/interactive";
+            case UsageEvents.Event.SCREEN_NON_INTERACTIVE:
+                return "Screen/non-interactive";
+            case UsageEvents.Event.SHORTCUT_INVOCATION:
+                return "Shortcut/invocation";
+            case UsageEvents.Event.STANDBY_BUCKET_CHANGED:
+                return "Bucket/changed";
+            case UsageEvents.Event.USER_INTERACTION:
+                return "User/interaction";
+            default:
+                return Integer.toString(type);
+        }
+    }
+
+    static String getExitReason(int reason) {
+        switch (reason) {
+            case ApplicationExitInfo.REASON_UNKNOWN:
+                return "Unknown";
+            case ApplicationExitInfo.REASON_EXIT_SELF:
+                return "ExitSelf";
+            case ApplicationExitInfo.REASON_SIGNALED:
+                return "Signaled";
+            case ApplicationExitInfo.REASON_LOW_MEMORY:
+                return "LowMemory";
+            case ApplicationExitInfo.REASON_CRASH:
+                return "Crash";
+            case ApplicationExitInfo.REASON_CRASH_NATIVE:
+                return "CrashNative";
+            case ApplicationExitInfo.REASON_ANR:
+                return "ANR";
+            case ApplicationExitInfo.REASON_INITIALIZATION_FAILURE:
+                return "InitializationFailure";
+            case ApplicationExitInfo.REASON_PERMISSION_CHANGE:
+                return "PermissionChange";
+            case ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE:
+                return "ExcessiveResourceUsage";
+            case ApplicationExitInfo.REASON_USER_REQUESTED:
+                return "UserRequested";
+            case ApplicationExitInfo.REASON_USER_STOPPED:
+                return "UserStopped";
+            case ApplicationExitInfo.REASON_DEPENDENCY_DIED:
+                return "DependencyDied";
+            case ApplicationExitInfo.REASON_OTHER:
+                return "Other";
+            default:
+                return Integer.toString(reason);
+        }
+    }
+
+    static String getInterruptionFilter(int filter) {
+        switch (filter) {
+            case NotificationManager.INTERRUPTION_FILTER_UNKNOWN:
+                return "Unknown";
+            case NotificationManager.INTERRUPTION_FILTER_ALL:
+                return "All";
+            case NotificationManager.INTERRUPTION_FILTER_PRIORITY:
+                return "Priority";
+            case NotificationManager.INTERRUPTION_FILTER_NONE:
+                return "None";
+            case NotificationManager.INTERRUPTION_FILTER_ALARMS:
+                return "Alarms";
+            default:
+                return Integer.toString(filter);
+        }
+    }
+
+    static <T extends Object> T getSystemService(Context context, Class<T> type) {
+        return ContextCompat.getSystemService(context.getApplicationContext(), type);
+    }
+
     // View
 
     static int getActionBarHeight(Context context) {
@@ -643,11 +771,7 @@ public class Helper {
     }
 
     static ObjectAnimator getFabAnimator(View fab, LifecycleOwner owner) {
-        ObjectAnimator animator = ObjectAnimator.ofFloat(fab, "alpha", 0.9f, 1.0f);
-        animator.setDuration(750L);
-        animator.setRepeatCount(ValueAnimator.INFINITE);
-        animator.setRepeatMode(ValueAnimator.REVERSE);
-        animator.addUpdateListener(new ObjectAnimator.AnimatorUpdateListener() {
+        ObjectAnimator.AnimatorUpdateListener listener = new ObjectAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
                 if (!owner.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
@@ -655,7 +779,26 @@ public class Helper {
                 fab.setScaleX((float) animation.getAnimatedValue());
                 fab.setScaleY((float) animation.getAnimatedValue());
             }
+        };
+
+        ObjectAnimator animator = ObjectAnimator.ofFloat(fab, "alpha", 0.9f, 1.0f);
+        animator.setDuration(750L);
+        animator.setRepeatCount(ValueAnimator.INFINITE);
+        animator.setRepeatMode(ValueAnimator.REVERSE);
+        animator.addUpdateListener(listener);
+
+        owner.getLifecycle().addObserver(new LifecycleObserver() {
+            @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+            public void onDestroyed() {
+                try {
+                    animator.removeUpdateListener(listener);
+                    owner.getLifecycle().removeObserver(this);
+                } catch (Throwable ex) {
+                    Log.e(ex);
+                }
+            }
         });
+
         return animator;
     }
 
@@ -693,13 +836,6 @@ public class Helper {
         intent.setDataAndTypeAndNormalize(uri, type);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
-        if (!("message/rfc822".equals(type) ||
-                "message/delivery-status".equals(type) ||
-                "message/disposition-notification".equals(type) ||
-                "text/rfc822-headers".equals(type) ||
-                "text/x-amp-html".equals(type)))
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-
         if (!TextUtils.isEmpty(name))
             intent.putExtra(Intent.EXTRA_TITLE, Helper.sanitizeFilename(name));
         Log.i("Intent=" + intent + " type=" + type);
@@ -709,7 +845,8 @@ public class Helper {
             List<ResolveInfo> ris = null;
             try {
                 PackageManager pm = context.getPackageManager();
-                ris = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+                int flags = (Build.VERSION.SDK_INT < Build.VERSION_CODES.M ? 0 : PackageManager.MATCH_ALL);
+                ris = pm.queryIntentActivities(intent, flags);
                 for (ResolveInfo ri : ris) {
                     Log.i("Target=" + ri);
                     context.grantUriPermission(ri.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -751,7 +888,7 @@ public class Helper {
 
     static void view(Context context, Intent intent) {
         Uri uri = intent.getData();
-        if ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()))
+        if (UriHelper.isHyperLink(uri))
             view(context, intent.getData(), false);
         else
             try {
@@ -775,24 +912,64 @@ public class Helper {
             return;
         }
 
-        boolean has = hasCustomTabs(context, uri);
-        Log.i("View=" + uri + " browse=" + browse + " task=" + task + " has=" + has);
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        String open_with_pkg = prefs.getString("open_with_pkg", null);
+        boolean open_with_tabs = prefs.getBoolean("open_with_tabs", true);
 
-        if (browse || !has) {
+        Log.i("View=" + uri +
+                " browse=" + browse +
+                " task=" + task +
+                " pkg=" + open_with_pkg + ":" + open_with_tabs +
+                " isHyperLink=" + UriHelper.isHyperLink(uri) +
+                " isInstalled=" + isInstalled(context, open_with_pkg) +
+                " hasCustomTabs=" + hasCustomTabs(context, uri, open_with_pkg));
+
+        if (UriHelper.isHyperLink(uri))
+            uri = UriHelper.fix(uri);
+        else {
+            open_with_pkg = null;
+            open_with_tabs = false;
+        }
+
+        if (!"chooser".equals(open_with_pkg)) {
+            if (open_with_pkg != null && !isInstalled(context, open_with_pkg))
+                open_with_pkg = null;
+
+            if (open_with_tabs && !hasCustomTabs(context, uri, open_with_pkg))
+                open_with_tabs = false;
+        }
+
+        Intent view = new Intent(Intent.ACTION_VIEW);
+        if (mimeType == null)
+            view.setData(uri);
+        else
+            view.setDataAndType(uri, mimeType);
+        if (task)
+            view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+        if ("chooser".equals(open_with_pkg) && !open_with_tabs) {
             try {
-                Intent view = new Intent(Intent.ACTION_VIEW);
-                if (mimeType == null)
-                    view.setData(uri);
-                else
-                    view.setDataAndType(uri, mimeType);
-                if (task)
-                    view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                EntityLog.log(context, "Launching chooser uri=" + uri +
+                        " intent=" + view +
+                        " extras=" + TextUtils.join(", ", Log.getExtras(view.getExtras())));
+                Intent chooser = Intent.createChooser(view, context.getString(R.string.title_select_app));
+                context.startActivity(chooser);
+            } catch (ActivityNotFoundException ex) {
+                Log.w(ex);
+                reportNoViewer(context, uri, ex);
+            }
+        } else if (browse || !open_with_tabs) {
+            try {
+                if (!"chooser".equals(open_with_pkg))
+                    view.setPackage(open_with_pkg);
+                EntityLog.log(context, "Launching view uri=" + uri +
+                        " intent=" + view +
+                        " extras=" + TextUtils.join(", ", Log.getExtras(view.getExtras())));
                 context.startActivity(view);
             } catch (Throwable ex) {
                 reportNoViewer(context, uri, ex);
             }
         } else {
-            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
             boolean navbar_colorize = prefs.getBoolean("navbar_colorize", false);
             int colorPrimary = resolveColor(context, R.attr.colorPrimary);
             int colorPrimaryDark = resolveColor(context, R.attr.colorPrimaryDark);
@@ -814,8 +991,33 @@ public class Helper {
                     .setStartAnimations(context, R.anim.activity_open_enter, R.anim.activity_open_exit)
                     .setExitAnimations(context, R.anim.activity_close_enter, R.anim.activity_close_exit);
 
+            Locale locale = Locale.getDefault();
+            Locale slocale = Resources.getSystem().getConfiguration().locale;
+
+            List<String> languages = new ArrayList<>();
+            languages.add(locale.toLanguageTag() + ";q=1.0");
+            if (!TextUtils.isEmpty(locale.getLanguage()))
+                languages.add(locale.getLanguage() + ";q=0.9");
+            if (!slocale.equals(locale)) {
+                languages.add(slocale.toLanguageTag() + ";q=0.8");
+                if (!TextUtils.isEmpty(slocale.getLanguage()))
+                    languages.add(slocale.getLanguage() + ";q=0.7");
+            }
+            languages.add("*;q=0.5");
+
+            Bundle headers = new Bundle();
+            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Language
+            headers.putString("Accept-Language", TextUtils.join(", ", languages));
+
             CustomTabsIntent customTabsIntent = builder.build();
+            customTabsIntent.intent.putExtra(Browser.EXTRA_HEADERS, headers);
+            if (!"chooser".equals(open_with_pkg))
+                customTabsIntent.intent.setPackage(open_with_pkg);
+
             try {
+                EntityLog.log(context, "Launching tab uri=" + uri +
+                        " intent=" + customTabsIntent.intent +
+                        " extras=" + TextUtils.join(", ", Log.getExtras(customTabsIntent.intent.getExtras())));
                 customTabsIntent.launchUrl(context, uri);
             } catch (Throwable ex) {
                 reportNoViewer(context, uri, ex);
@@ -823,26 +1025,15 @@ public class Helper {
         }
     }
 
-    static void customTabsWarmup(Context context) {
-        try {
-            CustomTabsClient.bindCustomTabsService(context, "com.android.chrome", new CustomTabsServiceConnection() {
-                @Override
-                public void onCustomTabsServiceConnected(@NonNull ComponentName name, @NonNull CustomTabsClient client) {
-                    Log.i("Warming up custom tabs");
-                    try {
-                        client.warmup(0);
-                    } catch (Throwable ex) {
-                        Log.w(ex);
-                    }
-                }
+    static boolean customTabsWarmup(Context context) {
+        if (context == null)
+            return false;
 
-                @Override
-                public void onServiceDisconnected(ComponentName name) {
-                    // Do nothing
-                }
-            });
+        try {
+            return CustomTabsClient.connectAndInitialize(context, PACKAGE_CHROME);
         } catch (Throwable ex) {
             Log.w(ex);
+            return false;
         }
     }
 
@@ -894,7 +1085,7 @@ public class Helper {
                 .build();
     }
 
-    static Uri getSupportUri(Context context) {
+    static Uri getSupportUri(Context context, String reference) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         String language = prefs.getString("language", null);
         Locale slocale = Resources.getSystem().getConfiguration().locale;
@@ -906,11 +1097,12 @@ public class Helper {
                 .appendQueryParameter("locale", slocale.toString())
                 .appendQueryParameter("language", language == null ? "" : language)
                 .appendQueryParameter("installed", Helper.hasValidFingerprint(context) ? "" : "Other")
+                .appendQueryParameter("reference", reference)
                 .build();
     }
 
-    static Intent getIntentIssue(Context context) {
-        if (ActivityBilling.isPro(context)) {
+    static Intent getIntentIssue(Context context, String reference) {
+        if (ActivityBilling.isPro(context) && false) {
             String version = BuildConfig.VERSION_NAME + BuildConfig.REVISION + "/" +
                     (Helper.hasValidFingerprint(context) ? "1" : "3") +
                     (BuildConfig.PLAY_STORE_RELEASE ? "p" : "") +
@@ -952,7 +1144,7 @@ public class Helper {
             return intent;
         } else {
             if (Helper.hasValidFingerprint(context))
-                return new Intent(Intent.ACTION_VIEW, getSupportUri(context));
+                return new Intent(Intent.ACTION_VIEW, getSupportUri(context, reference));
             else
                 return new Intent(Intent.ACTION_VIEW, Uri.parse(XDA_URI));
         }
@@ -972,6 +1164,31 @@ public class Helper {
             Log.e(ex);
         }
         return 0;
+    }
+
+    static long getUpdateTime(Context context) {
+        try {
+            PackageManager pm = context.getPackageManager();
+            PackageInfo pi = pm.getPackageInfo(BuildConfig.APPLICATION_ID, 0);
+            if (pi != null)
+                return pi.lastUpdateTime;
+        } catch (Throwable ex) {
+            Log.e(ex);
+        }
+        return 0;
+    }
+
+    static int getTargetSdk(Context context) {
+        if (targetSdk == null)
+            try {
+                PackageManager pm = context.getPackageManager();
+                ApplicationInfo ai = pm.getApplicationInfo(BuildConfig.APPLICATION_ID, 0);
+                targetSdk = ai.targetSdkVersion;
+            } catch (Throwable ex) {
+                Log.e(ex);
+                targetSdk = Build.VERSION.SDK_INT;
+            }
+        return targetSdk;
     }
 
     static boolean isSupportedDevice() {
@@ -1017,6 +1234,44 @@ public class Helper {
             return false;
         }
 
+        /*
+            Brand: HUAWEI
+            Manufacturer: HUAWEI
+            Model: BAH2-L09
+            Product: BAH2-L09
+            Device: HWBAH2
+            Android: 8.0.0
+
+            java.lang.ArrayIndexOutOfBoundsException: length=3; index=-1
+            at android.text.DynamicLayout.getBlockIndex(DynamicLayout.java:646)
+            at android.widget.Editor.drawHardwareAccelerated(Editor.java:1744)
+            at android.widget.Editor.onDraw(Editor.java:1713)
+            at android.widget.TextView.onDraw(TextView.java:7051)
+            at eu.faircode.email.FixedEditText.onDraw(SourceFile:1)
+            at android.view.View.draw(View.java:19314)
+            at android.view.View.updateDisplayListIfDirty(View.java:18250)
+            at android.view.View.draw(View.java:19042)
+            at android.view.ViewGroup.drawChild(ViewGroup.java:4271)
+            at android.view.ViewGroup.dispatchDraw(ViewGroup.java:4054)
+            at androidx.constraintlayout.widget.ConstraintLayout.dispatchDraw(SourceFile:5)
+            at android.view.View.updateDisplayListIfDirty(View.java:18241)
+            at android.view.ViewGroup.recreateChildDisplayList(ViewGroup.java:4252)
+            at android.view.ViewGroup.dispatchGetDisplayList(ViewGroup.java:4232)
+            at android.view.View.updateDisplayListIfDirty(View.java:18209)
+            at android.view.View.draw(View.java:19042)
+            at android.view.ViewGroup.drawChild(ViewGroup.java:4271)
+            at android.view.ViewGroup.dispatchDraw(ViewGroup.java:4054)
+            at androidx.constraintlayout.widget.ConstraintLayout.dispatchDraw(SourceFile:5)
+            at android.view.View.updateDisplayListIfDirty(View.java:18241)
+            at android.view.View.draw(View.java:19042)
+            at android.view.ViewGroup.drawChild(ViewGroup.java:4271)
+            at androidx.coordinatorlayout.widget.CoordinatorLayout.drawChild(SourceFile:17)
+            at android.view.ViewGroup.dispatchDraw(ViewGroup.java:4054)
+            at android.view.View.draw(View.java:19317)
+         */
+        if ("HWBAH2".equals(Build.DEVICE))
+            return false;
+
         return true;
     }
 
@@ -1038,6 +1293,16 @@ public class Helper {
 
     static boolean isXiaomi() {
         return "Xiaomi".equalsIgnoreCase(Build.MANUFACTURER);
+    }
+
+    static boolean isRedmiNote() {
+        // Manufacturer: Xiaomi
+        // Model: Redmi Note 8 Pro
+        // Model: Redmi Note 10S
+        return isXiaomi() &&
+                !TextUtils.isEmpty(Build.MODEL) &&
+                Build.MODEL.toLowerCase(Locale.ROOT).contains("redmi") &&
+                Build.MODEL.toLowerCase(Locale.ROOT).contains("note");
     }
 
     static boolean isMeizu() {
@@ -1109,18 +1374,16 @@ public class Helper {
                 // Vivo
                 isRealme() ||
                 isBlackview() ||
-                isSony() ||
-                BuildConfig.DEBUG);
+                isSony());
     }
 
-    static boolean isDozeRequired() {
-        return (Build.VERSION.SDK_INT > Build.VERSION_CODES.R && false);
+    static boolean isAndroid12() {
+        return (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S);
     }
 
     static String getUiModeType(Context context) {
         try {
-            UiModeManager uimm =
-                    (UiModeManager) context.getSystemService(Context.UI_MODE_SERVICE);
+            UiModeManager uimm = Helper.getSystemService(context, UiModeManager.class);
             int uiModeType = uimm.getCurrentModeType();
             switch (uiModeType) {
                 case Configuration.UI_MODE_TYPE_UNDEFINED:
@@ -1188,10 +1451,17 @@ public class Helper {
 
         AlertDialog.Builder builder = new AlertDialog.Builder(context)
                 .setView(dview)
+                .setNeutralButton(R.string.menu_faq, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        Uri uri = Helper.getSupportUri(context, "Report:viewer");
+                        view(context, uri, true);
+                    }
+                })
                 .setNegativeButton(android.R.string.cancel, null);
 
         if (hasPlayStore(context) && !TextUtils.isEmpty(extension)) {
-            builder.setNeutralButton(R.string.title_no_viewer_search, new DialogInterface.OnClickListener() {
+            builder.setPositiveButton(R.string.title_no_viewer_search, new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialogInterface, int i) {
                     try {
@@ -1214,7 +1484,7 @@ public class Helper {
 
     static void excludeFromRecents(Context context) {
         try {
-            ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+            ActivityManager am = Helper.getSystemService(context, ActivityManager.class);
             if (am == null)
                 return;
 
@@ -1261,6 +1531,60 @@ public class Helper {
         }
 
         return fragment.getClass().getName() + ":result:" + who;
+    }
+
+    static void clearViews(Object instance) {
+        try {
+            String cname = instance.getClass().getSimpleName();
+            for (Field field : instance.getClass().getDeclaredFields()) {
+                String fname = cname + ":" + field.getName();
+
+                Class<?> ftype = field.getType();
+                Class<?> type = (ftype.isArray() ? ftype.getComponentType() : ftype);
+
+                if (type == null) {
+                    Log.e(fname + "=null");
+                    continue;
+                }
+
+                if (View.class.isAssignableFrom(type) ||
+                        Animator.class.isAssignableFrom(type) ||
+                        Snackbar.class.isAssignableFrom(type) ||
+                        SelectionTracker.class.isAssignableFrom(type) ||
+                        SelectionTracker.SelectionPredicate.class.isAssignableFrom(type) ||
+                        PagerAdapter.class.isAssignableFrom(type) ||
+                        RecyclerView.Adapter.class.isAssignableFrom(type) ||
+                        TwoStateOwner.class.isAssignableFrom(type))
+                    try {
+                        Log.i("Clearing " + fname);
+
+                        field.setAccessible(true);
+
+                        if (!ftype.isArray()) {
+                            if (Animator.class.isAssignableFrom(type)) {
+                                Animator animator = (Animator) field.get(instance);
+                                if (animator != null) {
+                                    if (animator.isStarted())
+                                        animator.cancel();
+                                    animator.setTarget(null);
+                                }
+                            }
+
+                            if (Snackbar.class.isAssignableFrom(type)) {
+                                Snackbar snackbar = (Snackbar) field.get(instance);
+                                if (snackbar != null)
+                                    snackbar.setAction(null, null);
+                            }
+                        }
+
+                        field.set(instance, null);
+                    } catch (Throwable ex) {
+                        Log.e(new Throwable(fname, ex));
+                    }
+            }
+        } catch (Throwable ex) {
+            Log.e(ex);
+        }
     }
 
     // Graphics
@@ -1359,6 +1683,7 @@ public class Helper {
     }
 
     static boolean isDarkTheme(Context context) {
+        // R.attr.isLightTheme
         TypedValue tv = new TypedValue();
         context.getTheme().resolveAttribute(R.attr.themeName, tv, true);
         return (tv.string != null && !"light".contentEquals(tv.string));
@@ -1366,29 +1691,54 @@ public class Helper {
 
     static void showKeyboard(final View view) {
         final Context context = view.getContext();
-        InputMethodManager imm =
-                (InputMethodManager) context.getSystemService(Activity.INPUT_METHOD_SERVICE);
+        InputMethodManager imm = Helper.getSystemService(context, InputMethodManager.class);
         if (imm == null)
             return;
 
         view.postDelayed(new Runnable() {
             @Override
             public void run() {
-                Log.i("showKeyboard view=" + view);
-                imm.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT);
+                try {
+                    Log.i("showKeyboard view=" + view);
+                    imm.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT);
+                } catch (Throwable ex) {
+                    Log.e(ex);
+                }
             }
         }, 250);
     }
 
     static void hideKeyboard(final View view) {
         final Context context = view.getContext();
-        InputMethodManager imm =
-                (InputMethodManager) context.getSystemService(Activity.INPUT_METHOD_SERVICE);
+        InputMethodManager imm = Helper.getSystemService(context, InputMethodManager.class);
         if (imm == null)
             return;
 
-        Log.i("hideKeyboard view=" + view);
-        imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        try {
+            Log.i("hideKeyboard view=" + view);
+            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        } catch (Throwable ex) {
+            Log.e(ex);
+        }
+    }
+
+    static boolean isKeyboardVisible(final View view) {
+        try {
+            if (view == null)
+                return false;
+            View root = view.getRootView();
+            if (root == null)
+                return false;
+            WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(root);
+            if (insets == null)
+                return false;
+            boolean visible = insets.isVisible(WindowInsetsCompat.Type.ime());
+            Log.i("isKeyboardVisible=" + visible);
+            return visible;
+        } catch (Throwable ex) {
+            Log.e(ex);
+            return false;
+        }
     }
 
     static String getViewName(View view) {
@@ -1521,6 +1871,20 @@ public class Helper {
             return getTimeInstance(context, SimpleDateFormat.SHORT).format(millis);
         else
             return DateUtils.getRelativeTimeSpanString(context, millis);
+    }
+
+    static String formatDuration(long ms) {
+        int days = (int) (ms / (24 * 3600 * 1000L));
+        ms = ms % (24 * 3600 * 1000L);
+        long seconds = ms / 1000;
+        ms = ms % 1000;
+        return (days > 0 ? days + " " : "") + DateUtils.formatElapsedTime(seconds) + "." + ms;
+    }
+
+    static String formatNumber(Integer number, long max, NumberFormat nf) {
+        if (number == null)
+            return null;
+        return nf.format(Math.min(number, max)) + (number > max ? "+" : "");
     }
 
     static void linkPro(final TextView tv) {
@@ -1783,7 +2147,17 @@ public class Helper {
         };
     }
 
+    static boolean isDot(char c) {
+        return (c == '.' /* Latin */ || c == '。' /* Chinese */);
+    }
+
     // Files
+
+    static {
+        System.loadLibrary("fairemail");
+    }
+
+    public static native void sync();
 
     static String sanitizeFilename(String name) {
         if (name == null)
@@ -1810,6 +2184,14 @@ public class Helper {
         String extension = Helper.getExtension(filename);
         if (extension != null) {
             extension = extension.toLowerCase(Locale.ROOT);
+
+            if (extension.endsWith(")")) {
+                int p = extension.lastIndexOf('(');
+                if (p > 0 && p < extension.length() - 1)
+                    if (TextUtils.isDigitsOnly(extension.substring(p + 1, extension.length() - 1)))
+                        extension = extension.substring(0, p).trim();
+            }
+
             type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
         }
 
@@ -1906,6 +2288,8 @@ public class Helper {
 
     static long copy(Context context, Uri uri, File file) throws IOException {
         try (InputStream is = context.getContentResolver().openInputStream(uri)) {
+            if (is == null)
+                throw new FileNotFoundException(uri.toString());
             try (OutputStream os = new FileOutputStream(file)) {
                 return copy(is, os);
             }
@@ -1933,13 +2317,26 @@ public class Helper {
         return stats.getTotalBytes();
     }
 
-    static long getSize(File dir) {
+    static long getCacheQuota(Context context) {
+        // https://developer.android.com/reference/android/content/Context#getCacheDir()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            try {
+                StorageManager sm = Helper.getSystemService(context, StorageManager.class);
+                File cache = context.getCacheDir();
+                return sm.getCacheQuotaBytes(sm.getUuidForPath(cache));
+            } catch (IOException ex) {
+                Log.w(ex);
+            }
+        return 0;
+    }
+
+    static long getSizeUsed(File dir) {
         long size = 0;
         File[] listed = dir.listFiles();
         if (listed != null)
             for (File file : listed)
                 if (file.isDirectory())
-                    size += getSize(file);
+                    size += getSizeUsed(file);
                 else
                     size += file.length();
         return size;
@@ -1955,50 +2352,19 @@ public class Helper {
         //intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.fromFile(initial));
     }
 
-    static HttpURLConnection openUrlRedirect(Context context, String source, int timeout) throws IOException {
-        int redirects = 0;
-        URL url = new URL(source);
-        while (true) {
-            HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
-            urlConnection.setRequestMethod("GET");
-            urlConnection.setDoOutput(false);
-            urlConnection.setReadTimeout(timeout);
-            urlConnection.setConnectTimeout(timeout);
-            urlConnection.setInstanceFollowRedirects(true);
-            urlConnection.setRequestProperty("User-Agent", WebViewEx.getUserAgent(context));
-            urlConnection.connect();
+    static class ByteArrayInOutStream extends ByteArrayOutputStream {
+        public ByteArrayInOutStream() {
+            super();
+        }
 
-            try {
-                int status = urlConnection.getResponseCode();
+        public ByteArrayInOutStream(int size) {
+            super(size);
+        }
 
-                if (status == HttpURLConnection.HTTP_MOVED_PERM ||
-                        status == HttpURLConnection.HTTP_MOVED_TEMP ||
-                        status == HttpURLConnection.HTTP_SEE_OTHER ||
-                        status == 307 /* Temporary redirect */ ||
-                        status == 308 /* Permanent redirect */) {
-                    if (++redirects > MAX_REDIRECTS)
-                        throw new IOException("Too many redirects");
-
-                    String header = urlConnection.getHeaderField("Location");
-                    if (header == null)
-                        throw new IOException("Location header missing");
-
-                    String location = URLDecoder.decode(header, StandardCharsets.UTF_8.name());
-                    url = new URL(url, location);
-                    Log.i("Redirect #" + redirects + " to " + url);
-
-                    urlConnection.disconnect();
-                    continue;
-                }
-
-                if (status != HttpURLConnection.HTTP_OK)
-                    throw new IOException("Error " + status + ": " + urlConnection.getResponseMessage());
-
-                return urlConnection;
-            } catch (IOException ex) {
-                urlConnection.disconnect();
-                throw ex;
-            }
+        public ByteArrayInputStream getInputStream() {
+            ByteArrayInputStream in = new ByteArrayInputStream(this.buf, 0, this.count);
+            this.buf = null;
+            return in;
         }
     }
 
@@ -2023,6 +2389,17 @@ public class Helper {
     static String sha(String digest, byte[] data) throws NoSuchAlgorithmException {
         byte[] bytes = MessageDigest.getInstance(digest).digest(data);
         return hex(bytes);
+    }
+
+    static String getHash(InputStream is, String algorithm) throws NoSuchAlgorithmException, IOException {
+        MessageDigest digest = MessageDigest.getInstance(algorithm);
+
+        int count;
+        byte[] buffer = new byte[BUFFER_SIZE];
+        while ((count = is.read(buffer)) != -1)
+            digest.update(buffer, 0, count);
+
+        return hex(digest.digest());
     }
 
     static String hex(byte[] bytes) {
@@ -2166,14 +2543,21 @@ public class Helper {
 
                         @Override
                         public void onAuthenticationError(final int errorCode, @NonNull final CharSequence errString) {
-                            Log.w("Authenticate biometric error " + errorCode + ": " + errString);
+                            if (isCancelled(errorCode) || errorCode == BiometricPrompt.ERROR_UNABLE_TO_PROCESS)
+                                Log.w("Authenticate biometric error " + errorCode + ": " + errString);
+                            else
+                                Log.e("Authenticate biometric error " + errorCode + ": " + errString);
 
-                            if (errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
-                                    errorCode != BiometricPrompt.ERROR_CANCELED &&
-                                    errorCode != BiometricPrompt.ERROR_USER_CANCELED)
-                                ApplicationEx.getMainHandler().post(new Runnable() {
+                            if (isHardwareFailure(errorCode)) {
+                                prefs.edit().remove("biometrics").apply();
+                                ApplicationEx.getMainHandler().post(authenticated);
+                                return;
+                            }
+
+                            if (!isCancelled(errorCode))
+                                ApplicationEx.getMainHandler().post(new RunnableEx("auth:error") {
                                     @Override
-                                    public void run() {
+                                    public void delegate() {
                                         ToastEx.makeText(activity,
                                                 "Error " + errorCode + ": " + errString,
                                                 Toast.LENGTH_LONG).show();
@@ -2196,13 +2580,26 @@ public class Helper {
                             if (++fails >= 3)
                                 ApplicationEx.getMainHandler().post(cancelled);
                         }
+
+                        private boolean isCancelled(int errorCode) {
+                            return (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
+                                    errorCode == BiometricPrompt.ERROR_CANCELED ||
+                                    errorCode == BiometricPrompt.ERROR_USER_CANCELED);
+                        }
+
+                        private boolean isHardwareFailure(int errorCode) {
+                            return (errorCode == BiometricPrompt.ERROR_HW_UNAVAILABLE ||
+                                    errorCode == BiometricPrompt.ERROR_NO_BIOMETRICS || // No fingerprints enrolled.
+                                    errorCode == BiometricPrompt.ERROR_HW_NOT_PRESENT ||
+                                    errorCode == BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL);
+                        }
                     });
 
             prompt.authenticate(info.build());
 
-            final Runnable cancelPrompt = new Runnable() {
+            final Runnable cancelPrompt = new RunnableEx("auth:cancelprompt") {
                 @Override
-                public void run() {
+                public void delegate() {
                     try {
                         prompt.cancelAuthentication();
                     } catch (Throwable ex) {
@@ -2217,7 +2614,12 @@ public class Helper {
                 @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
                 public void onDestroy() {
                     Log.i("Authenticate destroyed");
-                    ApplicationEx.getMainHandler().post(cancelPrompt);
+                    ApplicationEx.getMainHandler().removeCallbacks(cancelPrompt);
+                    try {
+                        prompt.cancelAuthentication();
+                    } catch (Throwable ex) {
+                        Log.e(ex);
+                    }
                     owner.getLifecycle().removeObserver(this);
                 }
             });
@@ -2284,39 +2686,6 @@ public class Helper {
                 }
             });
 
-            etPin.setOnFocusChangeListener(new View.OnFocusChangeListener() {
-                @Override
-                public void onFocusChange(View v, boolean hasFocus) {
-                    if (hasFocus)
-                        try {
-                            dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
-                        } catch (Throwable ex) {
-                            Log.e(ex);
-                            /*
-                                java.lang.IllegalArgumentException: View=DecorView@f197613[ActivityMain] not attached to window manager
-                                        at android.view.WindowManagerGlobal.findViewLocked(WindowManagerGlobal.java:604)
-                                        at android.view.WindowManagerGlobal.updateViewLayout(WindowManagerGlobal.java:493)
-                                        at android.view.WindowManagerImpl.updateViewLayout(WindowManagerImpl.java:121)
-                                        at android.app.Dialog.onWindowAttributesChanged(Dialog.java:1072)
-                                        at androidx.appcompat.view.WindowCallbackWrapper.onWindowAttributesChanged(WindowCallbackWrapper:114)
-                                        at android.view.Window.dispatchWindowAttributesChanged(Window.java:1236)
-                                        at com.android.internal.policy.PhoneWindow.dispatchWindowAttributesChanged(PhoneWindow.java:3229)
-                                        at android.view.Window.setSoftInputMode(Window.java:1123)
-                                        at eu.faircode.email.Helper$15.onFocusChange(Helper:2169)
-                                        at android.view.View.onFocusChanged(View.java:8828)
-                                        at android.widget.TextView.onFocusChanged(TextView.java:12091)
-                                        at android.widget.EditText.onFocusChanged(EditText.java:248)
-                                        at android.view.View.handleFocusGainInternal(View.java:8498)
-                                        at android.view.View.requestFocusNoSearch(View.java:14103)
-                                        at android.view.View.requestFocus(View.java:14077)
-                                        at android.view.View.requestFocus(View.java:14044)
-                                        at android.view.View.requestFocus(View.java:13986)
-                                        at eu.faircode.email.Helper$16.run(Helper:2187)
-                             */
-                        }
-                }
-            });
-
             try {
                 dialog.show();
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
@@ -2326,13 +2695,18 @@ public class Helper {
                 long wait = (long) Math.pow(PIN_FAILURE_DELAY, pin_failure_count) * 1000L;
                 long delay = pin_failure_at + wait - new Date().getTime();
                 Log.i("PIN wait=" + wait + " delay=" + delay);
-                ApplicationEx.getMainHandler().postDelayed(new Runnable() {
+                dview.postDelayed(new Runnable() {
                     @Override
                     public void run() {
-                        etPin.setCompoundDrawables(null, null, null, null);
-                        etPin.setEnabled(true);
-                        etPin.requestFocus();
-                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                        try {
+                            etPin.setCompoundDrawables(null, null, null, null);
+                            etPin.setEnabled(true);
+                            etPin.requestFocus();
+                            showKeyboard(etPin);
+                            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                        } catch (Throwable ex) {
+                            Log.e(ex);
+                        }
                     }
                 }, delay < 0 ? 0 : delay);
 
@@ -2507,6 +2881,20 @@ public class Helper {
         return result;
     }
 
+    static int[] toIntArray(List<Integer> list) {
+        int[] result = new int[list.size()];
+        for (int i = 0; i < list.size(); i++)
+            result[i] = list.get(i);
+        return result;
+    }
+
+    static List<Integer> fromIntArray(int[] array) {
+        List<Integer> result = new ArrayList<>();
+        for (int i = 0; i < array.length; i++)
+            result.add(array[i]);
+        return result;
+    }
+
     static long[] toLongArray(List<Long> list) {
         long[] result = new long[list.size()];
         for (int i = 0; i < list.size(); i++)
@@ -2542,5 +2930,10 @@ public class Helper {
         Parcel p = Parcel.obtain();
         bundle.writeToParcel(p, 0);
         return p.dataSize();
+    }
+
+    static void clearAll(Context context) {
+        ActivityManager am = Helper.getSystemService(context, ActivityManager.class);
+        am.clearApplicationUserData();
     }
 }
